@@ -250,12 +250,22 @@ class LanguagePackTest {
             strings[line.key] = "é".repeat(pad) + marks
         }
         val packed = json(strings)
-        val parsed = ok(packed)
-        assertEquals(EnglishCopy.lines.size, parsed.accepted.size)
-        assertEquals(0, parsed.ignored)
-        LanguageText.apply(parsed.accepted)
-        for (line in EnglishCopy.lines) {
-            assertEquals(EnglishCopy.cap(line), LanguageText.text(line.key).length)
+        val bytes = packed.toByteArray(Charsets.UTF_8)
+        val parsed = LanguagePack.parse(bytes)
+        if (bytes.size <= LanguagePack.MAX_BYTES) {
+            val preview = (parsed as LanguageParse.Ok).preview
+            assertEquals(EnglishCopy.lines.size, preview.accepted.size)
+            assertEquals(0, preview.ignored)
+            LanguageText.apply(preview.accepted)
+            for (line in EnglishCopy.lines) {
+                assertEquals(EnglishCopy.cap(line), LanguageText.text(line.key).length)
+            }
+        } else {
+            // Every line at its slot cap, written with a two-byte letter, is over 264 KiB.
+            // The file cap stays. That whole file is refused. The packs in the app are smaller.
+            assertReject(parsed)
+            assertEquals(LanguageErrors.LARGE, (parsed as LanguageParse.Reject).messageKey)
+            assertTrue(bytes.size < LanguagePack.MAX_BYTES + 8 * 1024)
         }
         val shipped = repoFile("app/src/main/assets/lang")
         if (shipped.isDirectory) {
