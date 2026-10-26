@@ -4,8 +4,47 @@ Newest first. This is Fieldwatch (`app.fieldwatch`). Each build below is what Se
 
 Fieldwatch continues the Spectre 1.2.14 field build under a new name, application id, and the MIT License. It does not replace Spectre on a phone.
 
-## Unreleased
+## 1.1.32 — 26 October 2026
 
+- Show live path draws alert dots and known cameras on top of the drive line.
+- Hunt draws the walk before GPS locks. The line on that picture is No GPS yet. This walk is not on a map. Streets and the place in the corner stay off. Two fresh fixes place that walk when it is still about the first 20 m. A longer walk stays off the map.
+- Reports → Path draws cameras and detections on top of the drive line. Zooming in splits a numbered group into separate spots, unless those spots are the same place.
+- A real stop stays green. GPS jitter no longer flips that stretch back to blue.
+- Show live path keeps the drive line on the map when the view is zoomed in.
+- Zooming Reports → Path keeps the drive line inside the map.
+- Reports → Path can be pinched and dragged. A double-tap fits the whole path again.
+- A known camera speaks when it is still about 500 m ahead. The path report still counts cameras within about 150 m.
+- The drive line is a slightly darker blue. A green stop is the same width as that blue line.
+- Voice Alerts calls the red-light switch Alert for red light cameras.
+- Hunt shows the latest GPS fix as soon as it opens. The circle is the size of that fix. The heat trail starts after two fresh fixes agree, and steps taken before that are left off. In the first 20 m, one tight fix that disagrees moves the dot onto that fix. A phone whose step sensor is missing, or never reports a step, counts steps from the walking motion. A compass jump does not move the walk unless the phone itself is turning.
+- The sit report lists known cameras the same way as Reports → Path. The heading is Known cameras on path. Each type is the name, then how many faced the path and how many were on the path with no direction. A missing list is still named.
+- Cameras on a sit path are drawn larger, with a light ring, so they stay visible on the blue path. Show live path and Hunt keep the smaller marks.
+- Reports → Path leaves Known cameras on path off when that list is not on the phone, or when its layer switch is off. A list that is on still shows its rows. The debrief still counts a saved list.
+- Reports → Path lists known cameras as one row for each type, with the same colors as the map. The line under the heading is the distance. The debrief keeps the full sentences.
+- Reports → Path lists known cameras on the path under the radios that alerted. The lines match the sit report.
+- Cameras sit on top of the path line. That is Reports → Path, the printed path, and Show live path.
+- The printed path in a Debrief PDF and in Compare is the same blue as the path on the phone. A real stop is still green. The second sit stays slate. Reports → Path and that printed path show the cameras the sit report counts. A stored direction counts when it pointed toward the path. No stored direction counts as on the path. Gunshot detectors and a direction that pointed away are left out. Show live path and Hunt still draw the layer that is switched on.
+- The sit report counts cameras along the path. A stored direction counts when it pointed toward the path. No stored direction counts as on the path. Flock, other plate readers, speed cameras, red lights, and other cameras are listed. Gunshot detectors are left out. The count uses the lists saved on this phone.
+- Reports → Path leaves the corner line off a sit that has ended. That line is the grid, or masked while Privacy mode is on. An open sit still shows where this phone is.
+- Show live path draws the drive as a thicker blue line. A real stop is still green.
+- Zooming out on Show live path or Hunt shows one map picture for each spot. A closer picture no longer stays on top of the wider one.
+- Scrolling Show live path or Hunt keeps the pictures already on screen and fills the new ground as each picture arrives. The next screen in the direction of that scroll is saved for the next drag.
+- Show live path and Hunt save the next screen of the map along the direction of travel, and a little to the side when the course is turning. Those pictures stay off the screen until you get there.
+- A double-tap on Show live path opens the same scale as a sit that has not moved yet. The short side reaches about 220 m.
+- Hunt places the start on a GPS fix only when that fix is within about 12 m. It asks to count steps, and uses this phone's step sensor once that is allowed. Opening Hunt does not count as a step.
+- Hunt still follows this phone on a handset whose step sensor will not report steps. That handset counts steps from the accelerometer.
+- The pink pin is off the hunt map.
+- Hunt map colors grade from one place into the next again. A loud pass still outweighs a much weaker one.
+- A nearly gone hunt signal stays blue. The color moves gradually through the shades toward red as you get closer, and red shows by about −50 dBm. The place you are standing keeps the loudest reading heard there.
+- Hunt keeps following this phone after the radio goes out of range. No color is added on that part of the walk, because there is no reading to paint.
+- Hunt follows steps and the phone heading. GPS places that walk on the map and only nudges it when a good fix agrees. The circle on the dot grows as the walk gets longer. Hold the phone flat. A tilted phone pauses the steps. The place you are standing keeps the loudest reading heard there. The next place, about a step and a half on, gets the strength heard there, weaker included. The color grades evenly from one place into the next.
+- Dragging or pinching Show live path or Hunt keeps the direction already chosen. Direction of travel stays up. It no longer snaps to north up.
+- Show live path and Hunt fill the corners of the map when it turns with travel.
+- Location and Maps keeps saved map pictures on the phone, up to 512 MB, and can clear them. Clear saved maps does not remove plate readers or other sensors.
+- Location and Maps adds USGS Imagery Topo and FAA VFR Sectional. The USGS maps and FAA VFR Sectional cover the United States and do not ask for a key. FAA VFR Sectional says it is not for navigation. A view that is too far out for that chart asks you to zoom in. Under Map, Overlays can put USGS Shaded Relief and USGS Hydrography on top of the map you picked. Both cover the United States. Leave them off for the map alone. With an overlay on, the map credit and each overlay credit are separate lines on the right, so the grid on the left stays readable. With overlays off, the map credit stays one short line.
+- Location and Maps adds two Layers. License plate reader cameras downloads the United States plate-reader list (about 37 MB). Other sensors downloads the speed camera, red light, gunshot detector, and other camera list, about 1 MB. The map pictures stay the same. Neither list is included with the app. Each has its own Update. Marks show on Show live path, Hunt, and Reports → Path. Flock plate readers are blue. Other plate readers are amber. Speed cameras are teal, red lights are red, gunshot detectors are purple dots, and other cameras are a smaller gray mark. A crowd of one type keeps that color. Each type has its own voice alert, off until turned on. Turning one on speaks that notice. A switch does not hide marks. A plate-reader alert names the company when the file has one.
+- After that list finishes downloading, the row says Processing while the phone reads the file. A sensor with a known direction is a view cone. It stays small when the map is far out and grows when you zoom in. No direction, and every gunshot detector, is a dot. A saved copy that has only Flock cameras asks before Update, even when the downloaded list has not changed.
+- On Location and Maps, the paragraph above Map has the same space before the box that Position already has.
 - Bitchat is a Mesh signature. It matches the BLE service advertisement. It does not beep. Settings → Update stock catalog from GitHub adds it. Catalog 97.
 
 ## 1.1.31 — 23 October 2026

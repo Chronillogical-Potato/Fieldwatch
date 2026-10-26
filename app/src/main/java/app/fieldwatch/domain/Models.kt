@@ -657,14 +657,18 @@ data class WatchTarget(
 /**
  * Raster under Show live path, Reports → Path, and the path figure.
  * Missing JSON is [OSM]. Online place names and maps is the on/off.
- * OpenStreetMap and the USGS maps need no key. The others take a key
- * the user keeps on this phone. That key is not part of this setting.
+ * OpenStreetMap, the USGS maps, and FAA VFR Sectional need no key.
+ * The others take a key the user keeps on this phone. That key is not part of this setting.
  */
 @Serializable
 enum class MapBasemap {
     OSM,
     USGS_IMAGERY,
     USGS_TOPO,
+    USGS_IMAGERY_TOPO,
+    USGS_SHADED_RELIEF,
+    USGS_HYDRO,
+    FAA_VFR_SECTIONAL,
     ESRI_SATELLITE,
     ESRI_STREETS,
     ESRI_OUTDOOR,
@@ -691,6 +695,9 @@ enum class MapBasemap {
         val creditPrint: String,
         val creditUrl: String?,
         val redirectRoots: List<String>,
+        val minZoom: Int = 0,
+        val usOnly: Boolean = false,
+        val cautionKey: String? = null,
     )
 
     private val spec: Spec
@@ -717,6 +724,42 @@ enum class MapBasemap {
                 "map.usgs.topo",
                 "usgs-topo",
                 "USGSTopo",
+            )
+            USGS_IMAGERY_TOPO -> usgs(
+                "map.usgs.imagerytopo",
+                "usgs-imagerytopo",
+                "USGSImageryTopo",
+            )
+            USGS_SHADED_RELIEF -> usgs(
+                "map.usgs.relief",
+                "usgs-relief",
+                "USGSShadedReliefOnly",
+                "U.S. Geological Survey (3DEP)",
+            )
+            USGS_HYDRO -> usgs(
+                "map.usgs.hydro",
+                "usgs-hydro",
+                "USGSHydroCached",
+                "U.S. Geological Survey (NHD)",
+            )
+            FAA_VFR_SECTIONAL -> Spec(
+                labelKey = "map.faa.vfr",
+                cacheName = "faa-vfr",
+                maxZoom = 12,
+                service = null,
+                host = "tiles.arcgis.com",
+                keyQuery = null,
+                url = { z, x, y ->
+                    "https://tiles.arcgis.com/tiles/ssFJjBXIUyZDrSYZ/arcgis/rest/services/" +
+                        "VFR_Sectional/MapServer/tile/$z/$y/$x"
+                },
+                credit = "Federal Aviation Administration",
+                creditPrint = "Federal Aviation Administration. Not for navigation. Charts update every 56 days.",
+                creditUrl = "https://www.faa.gov/air_traffic/flight_info/aeronav/digital_products/vfr/",
+                redirectRoots = listOf("arcgis.com"),
+                minZoom = 8,
+                usOnly = true,
+                cautionKey = "map.faa.not.for.navigation",
             )
             ESRI_SATELLITE -> esri(
                 "map.esri.satellite",
@@ -806,7 +849,23 @@ enum class MapBasemap {
     /** Highest zoom this service actually serves. Screen and print stay at or under it. */
     val maxZoom: Int get() = spec.maxZoom
 
-    /** Null on OpenStreetMap and the USGS maps. One saved key covers every style of a service. */
+    /** Lowest zoom this service serves. A coarser view asks the user to zoom in. */
+    val minZoom: Int get() = spec.minZoom
+
+    /** United States coverage. The picker says so. The list itself does not hide the row. */
+    val usOnly: Boolean get() = spec.usOnly
+
+    /** Extra corner phrase, localized. Null on every map except FAA VFR Sectional. */
+    val cautionKey: String? get() = spec.cautionKey
+
+    /** Second line in the Map list. Empty on a world map. */
+    val subtitleKeys: List<String>
+        get() = buildList {
+            if (usOnly) add("map.united.states")
+            cautionKey?.let { add(it) }
+        }
+
+    /** Null on OpenStreetMap, the USGS maps, and FAA VFR Sectional. One saved key covers every style of a service. */
     val service: MapKeyService? get() = spec.service
 
     val needsKey: Boolean get() = spec.service != null
@@ -827,12 +886,62 @@ enum class MapBasemap {
     /** Corner line on the phone. The OpenStreetMap phrase stays this English. */
     val credit: String get() = spec.credit
 
+    /**
+     * Corner line with the localized FAA caution appended, then any overlay credits.
+     * Other maps ignore [localizedCaution] and keep [credit].
+     */
+    fun screenCredit(
+        localizedCaution: String?,
+        overlays: Collection<MapOverlay> = emptyList(),
+    ): String = screenCreditLines(localizedCaution, overlays).joinToString(" · ")
+
+    /**
+     * One line for the map, then one line for each overlay.
+     * An empty overlay list is the map line alone.
+     */
+    fun screenCreditLines(
+        localizedCaution: String?,
+        overlays: Collection<MapOverlay> = emptyList(),
+    ): List<String> {
+        val base = if (cautionKey == null) {
+            credit
+        } else {
+            val phrase = localizedCaution?.trim().orEmpty()
+            if (phrase.isEmpty()) credit else "$credit. $phrase"
+        }
+        val extras = MapOverlay.ordered(overlays).map { it.basemap.credit }
+        return if (extras.isEmpty()) listOf(base) else listOf(base) + extras
+    }
+
+    /** Screen lines, with the sensor-list credit on the map line when that layer is on. */
+    fun shownCreditLines(
+        localizedCaution: String?,
+        overlays: Collection<MapOverlay>,
+        includeSensorCredit: Boolean,
+    ): List<String> {
+        val parts = screenCreditLines(localizedCaution, overlays)
+        return listOf(FlockCredit.append(parts.first(), includeSensorCredit)) + parts.drop(1)
+    }
+
     /** Printed line. A PDF has no link, so OpenStreetMap names the license page. */
     val creditPrint: String get() = spec.creditPrint
 
+    /** Printed line plus the overlay sources actually drawn on that picture. */
+    fun creditLine(overlays: Collection<MapOverlay> = emptyList()): String =
+        MapOverlay.joinCredit(creditPrint, overlays)
+
+    /** Shaded relief and hydrography are overlays, not rows in the Map list. */
+    val inPicker: Boolean
+        get() = this != USGS_SHADED_RELIEF && this != USGS_HYDRO
+
     val creditUrl: String? get() = spec.creditUrl
 
-    private fun usgs(labelKey: String, cacheName: String, serviceName: String) = Spec(
+    private fun usgs(
+        labelKey: String,
+        cacheName: String,
+        serviceName: String,
+        credit: String = "U.S. Geological Survey",
+    ) = Spec(
         labelKey = labelKey,
         cacheName = cacheName,
         maxZoom = 16,
@@ -842,10 +951,11 @@ enum class MapBasemap {
         url = { z, x, y ->
             "https://basemap.nationalmap.gov/arcgis/rest/services/$serviceName/MapServer/tile/$z/$y/$x"
         },
-        credit = "U.S. Geological Survey",
-        creditPrint = "U.S. Geological Survey",
+        credit = credit,
+        creditPrint = credit,
         creditUrl = null,
         redirectRoots = listOf("nationalmap.gov", "usgs.gov"),
+        usOnly = true,
     )
 
     private fun esri(labelKey: String, cacheName: String, style: String, credit: String) = Spec(
@@ -922,6 +1032,41 @@ enum class MapBasemap {
 }
 
 /**
+ * Pictures drawn on top of the chosen map. None is the start.
+ * Relief is a gray hillshade and darkens the map under it.
+ * Hydrography is transparent water and is drawn after relief.
+ */
+@Serializable
+enum class MapOverlay {
+    USGS_SHADED_RELIEF,
+    USGS_HYDRO,
+    ;
+
+    val basemap: MapBasemap
+        get() = when (this) {
+            USGS_SHADED_RELIEF -> MapBasemap.USGS_SHADED_RELIEF
+            USGS_HYDRO -> MapBasemap.USGS_HYDRO
+        }
+
+    /** Hillshade tiles are opaque gray. They darken the map instead of covering it. */
+    val multiply: Boolean get() = this == USGS_SHADED_RELIEF
+
+    companion object {
+        /** Relief under the water lines. A set from JSON keeps this order. */
+        fun ordered(selected: Collection<MapOverlay>): List<MapOverlay> =
+            entries.filter { it in selected }
+
+        fun key(selected: Collection<MapOverlay>): String =
+            ordered(selected).joinToString(",") { it.name }.ifEmpty { "none" }
+
+        fun joinCredit(base: String, selected: Collection<MapOverlay>): String {
+            val extra = ordered(selected).joinToString(" · ") { it.basemap.credit }
+            return if (extra.isEmpty()) base else "$base · $extra"
+        }
+    }
+}
+
+/**
  * Lower-left readout on the on-screen maps. This phone now.
  * Missing JSON is [OFF]. The path figure does not use it.
  */
@@ -957,12 +1102,12 @@ object MapFrame {
 
     /**
      * Half the short side of the close view, in meters.
-     * Twice the first close window. The short edge sits a little past about 100 m.
+     * The same scale as a sit that has not moved yet, about 220 m.
      */
-    val CLOSE_HALF_M: Float = (CoTravel.NEAR_M * 2.4).toFloat()
+    val CLOSE_HALF_M: Float = SitPathPlot.MIN_HALF_SPAN_M * SitPathPlot.FIT_PAD
 
     /** Tile window around you while the close view follows. Covers a turned wide band. */
-    const val CLOSE_TILE_HALF_M = 280f
+    const val CLOSE_TILE_HALF_M = 560f
 
     /** -1 is an older file. [mapRotate] then picks north-up or travel, zoomed out. */
     fun resolved(saved: Int, mapRotate: Boolean): Int =
@@ -973,6 +1118,16 @@ object MapFrame {
 
     /** Direction of travel is up. North-up frames stay fixed. */
     fun turns(frame: Int): Boolean = frame == TRAVEL || frame == CLOSE
+
+    /**
+     * Course to draw. A finite held course stays put while the finger has the map.
+     * North-up frames stay north-up. A missing course stays north-up.
+     */
+    fun drawnCourse(frame: Int, heldCourseDeg: Double?, liveCourseDeg: Double): Double {
+        if (!turns(frame)) return Double.NaN
+        if (heldCourseDeg != null && heldCourseDeg.isFinite()) return heldCourseDeg
+        return if (liveCourseDeg.isFinite()) liveCourseDeg else Double.NaN
+    }
 
     /** Tap. North-up and direction of travel trade places. Zoom stays. */
     fun bearingToggled(current: Int): Int = when (current) {
@@ -1021,6 +1176,25 @@ data class AppSettings(
     val onlineLookup: Boolean = true,
     /** Which raster [onlineLookup] loads. Missing JSON is OpenStreetMap. Turning maps off keeps this. */
     val mapBasemap: MapBasemap = MapBasemap.OSM,
+    /**
+     * Shaded relief and hydrography on top of [mapBasemap]. Missing JSON is none.
+     * An older file that picked either one as the map moves it here and returns to OpenStreetMap.
+     */
+    val mapOverlays: Set<MapOverlay> = emptySet(),
+    /** Plate readers on the path maps. Off until chosen. Turning this off keeps the saved file. */
+    val flockLayer: Boolean = false,
+    /** Other sensors on the path maps. Off until chosen. Turning this off keeps the saved file. */
+    val sensorLayer: Boolean = false,
+    /** Notify when a plate reader is ahead. Off until chosen. Acts only while [flockLayer] is on. */
+    val flockAlert: Boolean = false,
+    /** Notify when a speed camera is ahead. Off until chosen. Acts only while [sensorLayer] is on. */
+    val speedAlert: Boolean = false,
+    /** Notify when a red-light camera is ahead. Off until chosen. Acts only while [sensorLayer] is on. */
+    val redAlert: Boolean = false,
+    /** Notify when a gunshot detector is ahead. Off until chosen. Acts only while [sensorLayer] is on. */
+    val gunshotAlert: Boolean = false,
+    /** Notify when another mapped camera is ahead. Off until chosen. Acts only while [sensorLayer] is on. */
+    val cameraAlert: Boolean = false,
     /** Lower left of the on-screen map. Missing JSON is off. */
     val mapFooter: MapFooter = MapFooter.OFF,
     /**
@@ -1168,6 +1342,22 @@ const val DISCLAIMER_REV = 3
 const val LIVE_TOUR_REV = 1
 
 fun AppSettings.disclaimerOk(): Boolean = disclaimerRev >= DISCLAIMER_REV
+
+/**
+ * Shaded relief and hydrography used to be map choices.
+ * A saved choice becomes that overlay on OpenStreetMap.
+ */
+fun AppSettings.withOverlayBasemaps(): AppSettings {
+    val moved = when (mapBasemap) {
+        MapBasemap.USGS_SHADED_RELIEF -> MapOverlay.USGS_SHADED_RELIEF
+        MapBasemap.USGS_HYDRO -> MapOverlay.USGS_HYDRO
+        else -> return this
+    }
+    return copy(
+        mapBasemap = MapBasemap.OSM,
+        mapOverlays = mapOverlays + moved,
+    )
+}
 
 /** One offer per [LIVE_TOUR_REV]. A phone already on this rev is left as saved. */
 fun AppSettings.offerLiveTourOnce(): AppSettings {

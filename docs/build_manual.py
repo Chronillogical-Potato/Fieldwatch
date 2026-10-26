@@ -479,8 +479,8 @@ def draw_cover(c, doc):
         y -= 16
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 9)
-    c.drawString(48, 108, "Version 1.1.31")
-    c.drawString(48, 94, "23 October 2026")
+    c.drawString(48, 108, "Version 1.1.32")
+    c.drawString(48, 94, "26 October 2026")
     c.drawString(48, 80, "Package  app.fieldwatch   ·   Android 10+ (API 29)   ·   Target API 35")
     c.setStrokeColor(colors.HexColor("#2A3340"))
     c.setLineWidth(0.6)
@@ -520,7 +520,7 @@ def draw_body(c, doc):
     c.line(48, 40, PAGE_W - 48, 40)
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 8)
-    c.drawString(48, 28, "v1.1.31  ·  Off Grid Pete LLC")
+    c.drawString(48, 28, "v1.1.32  ·  Off Grid Pete LLC")
     draw_ig_mark(c, 148, 30, 5.2, MUTED)
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 8)
@@ -927,7 +927,8 @@ def story():
             "hold the phone against your body and turn, a crude heading from body-block. "
             "Hunt also paints a heat cloud of where this phone heard that radio. A louder "
             "color means it was stronger there. That is still not a bearing and not a fix "
-            "on the other radio. That is not DF and not a compass. "
+            "on the other radio. The cloud can start before GPS locks. The page then says "
+            "No GPS yet. This walk is not on a map. §12.13. That is still not direction finding, and it is not a compass. "
             "The button on Show live path and Hunt only turns that map between north up and the direction of travel. A double-tap on Show live path switches the whole path and a close view around this phone. It is not a bearing to the other radio. §5.3.4."
         ),
         P("3.3 Dependence on active broadcast", "h2"),
@@ -1562,7 +1563,7 @@ def story():
         P("5.3.4 Show live path", "h3"),
         figure_wrap(
             "fig-live-path.png",
-            "Fig. 3 — Show live path. Drag the bar under the map.",
+            "Fig. 3 — Show live path. The close view sits over the list. Drag the bar under the map.",
             "The switch is on Display, just above <b>RSSI bars</b>. It starts off. "
             "Turn it on and a north-up map sits over the list. Drag the bar. "
             "It stays where you leave it, from about a fifth of the screen to about three quarters. "
@@ -1598,47 +1599,52 @@ def story():
             "decide who is on that list. Tap a dot to open that radio. A stack says "
             "<b>Radios here: N</b>. Thick green is a real stop: this phone stayed within about "
             "25 m for about 40 seconds. Reports → Path uses that same mark. The rest of the "
-            "drive is the plain line. Time of day sits along the path. Aircraft tracks and "
+            "drive is a blue line. Time of day sits along the path. Alert dots and known cameras from Layers "
+            "are drawn on top of that line (§5.7.2). Aircraft tracks and "
             "the GNSS diamond stay on Reports → Path. They are not drawn on this band."
         ),
         P(
             "One GPS fix is enough to show the neighborhood and the blue dot. "
-            "Settings → <b>Online place names and maps</b> (on by default) loads the map from "
-            "Settings → <b>Location and Maps</b> when the phone is online. OpenStreetMap is the start and covers the world. "
-            "USGS Imagery and USGS Topo cover the United States. "
-            "A map marked Key also covers the world. How to get that key and paste it is §5.7.1. "
-            "The key stays on this phone and is left out of Export settings. "
-            "OpenStreetMap and the USGS maps do not ask for a key. "
-            "A small line in the lower right names the map. "
-            "Settings → <b>Location and Maps</b> can put where this phone is now on the lower left, as GPS or as a grid. "
-            "Off leaves that corner empty. Privacy mode masks it. "
-            "The line stays put until this phone has moved. "
-            "Off, or no network, or no picture for that place: the line on a plain background. "
-            "OpenStreetMap and the USGS maps show no error dialog. "
-            "A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. "
-            "Pinch or drag holds the view and stops following you. "
-            "Tiles then load for the area on screen. <b>Recenter</b> follows again in the zoom and facing you already chose. "
-            "It stays hidden while the map is already following. "
-            "While the view is held, the map stays north-up."
+            "With <b>Online place names and maps</b> on, which it is at the start, and the phone online, "
+            "the picture comes from Settings → <b>Location and Maps</b>. "
+            "OpenStreetMap is the map you start with, and it covers the world. "
+            "The USGS maps cover the United States. FAA VFR Sectional is a United States chart, and it is not for navigation. "
+            "Under Map you can lay USGS Shaded Relief or USGS Hydrography over that picture. Both of those cover the United States. "
+            "Layers can add known cameras and detectors from two lists you download. Those marks sit here with the radios this phone hears. How to load the lists, update them, and turn the voices on is §5.7.2. "
+            "A map marked Key also covers the world. How to get that key and paste it is §5.7.1. The key stays on this phone, and Export settings leaves it out. "
+            "OpenStreetMap, the USGS maps, and FAA VFR Sectional do not ask for a key. "
+            "A small line in the lower right names the map you are looking at."
         ),
         P(
-            "<b>Two zoom levels.</b> Double-tap the map. One fits the whole path. "
-            "The other stays on this phone, a little past about 100 m, so a loud radio nearby still fits. "
-            "Facing stays as you left it. A double-tap also lets go of a pinch or a drag. "
-            "On a long drive, direction of travel can leave the sides blank. The close view still shows the map around you."
+            "Pictures you have already loaded stay on the phone. "
+            "<b>Clear saved maps</b>, on Location and Maps, deletes those pictures. The next time you look, they download again. Plate readers and the other sensor list are left alone."
         ),
         P(
-            "<b>North up and direction of travel.</b> Tap the button. North up keeps north at the top. "
-            "Direction of travel keeps the way you are going at the top. Zoom stays put. "
-            "The picture on the button is the one you are in. "
-            "Whole path, north up: a bent path, with N above it. "
-            "Whole path, direction of travel: compass letters over a smaller bent path. "
-            "Close view, direction of travel: those letters, larger, turning as you turn. "
-            "Close view, north up: N over an arrow. "
-            "Standing still keeps the last direction. Turning in place does not turn the map. "
-            "With no direction yet, the map stays north-up. "
-            "Hunt uses the same button and stays close on you. A double-tap there changes this zoom too. "
-            "Reports → Path stays north-up. No button, and no double-tap."
+            "Location and Maps can also put where this phone is now in the lower left, as GPS or as a grid. "
+            "Turn that off and the corner stays empty. Privacy mode masks it. The reading does not move until this phone has moved. "
+            "If maps are off, the phone is offline, or there is no picture for that place, you still get the drive line on a plain background. "
+            "OpenStreetMap, the USGS maps, and FAA VFR Sectional fail quietly. "
+            "A map marked Key tells you when the key is missing, the service rejects it, or the picture does not load."
+        ),
+        P(
+            "Pinch or drag when you want to look around. That holds the view, stops following you, and keeps the map north-up while you hold it. New pictures then load for the ground on screen. "
+            "<b>Recenter</b> follows you again, in the zoom and the facing you already chose. The button stays hidden while the map is already following."
+        ),
+        P(
+            "<b>Two zoom levels.</b> Double-tap the map to switch between them. "
+            "One fits the whole path. The other stays on this phone, about 220 m on the short side, so a loud radio nearby still fits. "
+            "The facing you chose stays put, and a double-tap also lets go of a pinch or a drag. "
+            "On a long drive, direction of travel can leave the sides of the wide view blank. The close view still shows the map around you."
+        ),
+        P(
+            "<b>North up and direction of travel.</b> Tap the button to switch. "
+            "North up keeps north at the top. Direction of travel keeps the way you are going at the top. The zoom does not change, and the picture on the button is the mode you are in. "
+            "On the whole path with north up, you see the bend of the drive and an N above it. "
+            "In the direction of travel, compass letters sit over a smaller bend. "
+            "In the close view those letters are larger, and they turn as you turn. Close view with north up is an N over an arrow. "
+            "Standing still keeps the last direction. Turning in place does not turn the map. Until the phone has a direction, the map stays north-up. "
+            "Hunt uses the same button, on a street map and on the blank walk before any streets, and that picture stays close on you. A double-tap there changes this zoom too. "
+            "Reports → Path stays north-up. It has no facing button. Pinch or drag to look around, and a double-tap fits the whole path again."
         ),
         P(
             "The path is recorded while Tag detections with GPS is on, "
@@ -1877,32 +1883,59 @@ def story():
         figure_wrap(
             "fig-hunt.png",
             "Fig. 5 — Hunt.",
-            "<b>Hunt</b> (BLE only). Device detail → Hunt. A full-screen page for this advertiser. "
-            "The map paints a heat cloud of where this phone heard that radio. "
-            "The color runs from blue where it was weak, through cyan, green, yellow, and orange, to red where it was powerful. "
-            "The bar on the map reads Weak, Moderate, Strong, and Powerful. "
-            "Hold the phone upright, out in front of you, in one hand. Point the top of the phone the way you are walking, and keep that grip. Walk slowly. "
-            "Walk a pattern — forward, back, and to both sides — and let the cloud build. A turn in place does not move the dot. "
-            "The walk connects the hears, and the color changes smoothly from one to the next. "
-            "Close parts of the walk fill in between the lines. A far gap stays open. "
-            "Red is about −45 dBm or louder. The brightest patch is where this phone heard it loudest. Search there. The radio is usually near that spot, because the signal is strongest close to the radio. "
-            "The loudest mark sits in that patch. The patch is that hear. It is not a pin on the other radio. "
-            "The map stays close on you. Pinch out for the whole walk, or pinch in for a few meters of ground. "
-            "Leaving the page keeps the cloud until Reset this hunt, or until you hunt a different radio. "
-            "Steps fill in short moves between GPS fixes. While GPS is moving, steps follow that direction. The top of the phone is used when GPS is stuck. A turn in place does not move the dot. A tight GPS fix still recenters the walk. The lower-left reading matches the dot. Privacy mode shows masked in that corner. "
-            "Pinch or drag holds the view. Double-tap, or Recenter, follows you again. "
-            "The same button sits where N was. It turns this map the same way. It does not point at the radio. "
-            "Night mode leaves this cloud in its own colors. "
-            "The map fills the space above the number. "
-            "About −45 dBm or louder is the same very strong band as detail. Look around. "
-            "A 127 reading is ignored. It is not available. "
-            "Watch the big RSSI number, the sparkline, and loudest-this-hunt. Closer to 0 is louder here. "
-            "Beep and Vibrate (off by default, remembered) sit under Reset / Back and tick faster as RSSI gets louder — a short click, not the watchlist chirp. They are on in this shot. They stay quiet when there is no packet, or the radio has left. "
-            "The screen stays on while Hunt is open. "
-            "It uses the live BLE store, even if the Live display was paused. This is not meters "
-            "and not a pin on the other radio. Wi-Fi access points have no Hunt button: stock "
-            "Android batches them about every 30 s (about 8 s with Faster Wi-Fi AP scans), still "
-            "too slow to walk toward. Randomized BLE can vanish mid-hunt. Experimental. Field tactics: §12.13.",
+            "<b>Hunt</b> is for one Bluetooth radio. Open it from the detail page for that radio. "
+            "The screen is a heat cloud of where this phone heard it. "
+            "If you have loaded license plate readers or other sensors, those marks can sit on the same map, under the cloud. "
+            "Blue is a weak hear. The color warms through cyan, green, yellow, and orange, and red is powerful. "
+            "The bar on the map names those bands Weak, Moderate, Strong, and Powerful. "
+            "Red is about −45 dBm or louder, the same very strong band as the detail page. When you see that, look around you.",
+            "Hold the phone flat, out in front of you, screen up, in one hand. "
+            "Point the top of the phone the way you are walking, and keep that grip. Walk slowly. "
+            "Cover the ground in a pattern: forward, back, and out to both sides, and let the cloud build. "
+            "Turning in place does not move the dot, so spinning will not build the cloud. "
+            "Each hear joins the last one, and the color changes smoothly along the walk. "
+            "Short gaps fill in. A long gap stays open.",
+            "The brightest patch is where this phone heard the radio loudest. "
+            "Hunt puts a small ring on that spot. Let the ring guide the next pass. Do not let it dictate the path, and do not treat it as the radio. "
+            "A strong reflection off a wall can set the ring a step or two to the side.",
+            "The dot is this phone. The circle around it shows how sure that place is. "
+            "It starts at about four meters and grows slowly as you walk farther. "
+            "While you hold the phone flat, the circle stays a bright cyan. "
+            "Tip the phone and leave it tipped, and the circle turns amber. Steps pause until you lay it flat again.",
+            "You can start before the phone has a GPS fix. There are no streets yet. "
+            "A line in the middle reads No GPS yet. This walk is not on a map. "
+            "Your steps still move the dot, the circle, the heat, and the ring. "
+            "Use the same flat grip you would use once a map is there. "
+            "The scale at the bottom stays in meters, and the corner of the screen stays empty. "
+            "Known cameras stay off until the streets appear. "
+            "The button that used to be N still switches between north up and the direction of travel. It does not point at the radio.",
+            "When two fresh fixes agree, and you are still within about the first 20 m, Hunt places that short walk on the map. "
+            "The dot lands on the fix, and the steps you already took stay behind it. The line goes away. "
+            "If you have already walked farther than that, the walk stays on the blank picture, and a later fix leaves it there. "
+            "Leave the page and open the same radio again, and a blank walk continues where you left it. "
+            "Reset this hunt, or a hunt on a different radio, starts over. "
+            "Once the walk is on the map, a good fix can correct it, and the reading in the lower left matches the dot. "
+            "Privacy mode shows masked in that corner.",
+            "The map stays close on you. Pinch out to see the whole walk, or pinch in to a few meters of ground. "
+            "A pinch or a drag holds the view. Double-tap, or Recenter, follows you again. "
+            "Night mode leaves this cloud in its own colors. The map fills the space above the number.",
+            "Watch the large RSSI number, the sparkline, and loudest-this-hunt. Closer to 0 is louder where you are standing. "
+            "A reading of 127 is ignored. It means the strength was not available. "
+            "Leave the page and the cloud stays until you tap Reset this hunt, or until you hunt a different radio.",
+            "Beep and Vibrate sit under Reset and Back. Both start off, and the phone remembers what you chose. "
+            "They tick faster as the signal gets louder. The sound is a short click, not the watchlist chirp. "
+            "They are on in this shot. They stay quiet when there is no packet, or when the radio has left. "
+            "The screen stays on while Hunt is open, and Hunt keeps reading Bluetooth even if you had paused the Live display.",
+            "Hunt is not a distance in meters, and the ring is not a pin on the other radio. "
+            "Wi-Fi access points have no Hunt button. Stock Android only reports them about every 30 seconds, "
+            "or about every 8 seconds with Faster Wi-Fi AP scans, which is still too slow to walk toward. "
+            "A Bluetooth address that keeps changing can disappear in the middle of a hunt. "
+            "Treat the page as experimental. The field method is in §12.13.",
+            "Hunt is designed to work with whatever motion this phone can provide, so any phone can use it. "
+            "The heat, the number, and the ring behave the same way. "
+            "What changes is how steadily the dot follows your steps. "
+            "A phone with a step sensor that reports those steps tracks the walk better, and that is the better experience with this feature. "
+            "A phone without one still hunts. The dot is simply less steady. §12.13.",
         ),
         P(
             "At the bottom of the page, under Hunt and the Signature family card: "
@@ -1991,7 +2024,7 @@ def story():
             "(open sit, a saved sit, or last 15 minutes). "
             "Tag detections with GPS must have been on, and the window needs a GPS fix, "
             "or the page says so. One fix still draws, on a short scale, so the point is easy to see. "
-            "This shot is Trip to Lake House: 25333 m path, 16110 m across, 12 alerts, 5 GNSS. "
+            "This shot is Trip to Lake House: 25333 m path, 16110 m span, 12 alerts, 5 GNSS. "
             "The street map is on. The head says End. "
             "Red diamonds are where this phone was during a GNSS detection. "
             "A longer walk or drive fills the plot the same way. Start sit for a longer track than Live’s last 15 minutes. "
@@ -1999,87 +2032,93 @@ def story():
             "An aircraft card title that is a UAS id is shown as Aircraft.",
         ),
         P(
-            "<b>Watch it live.</b> Leave the Path page in front while you walk or drive. The plot redraws "
-            "about every three seconds — not every GPS fix. The line is the same driven trace as "
-            "Show live path (§5.3.4): the line keeps a point every few meters, so it follows the street around a corner. The road already driven stays where it was. "
-            "Last 15 minutes (no sit running): a sliding 15-minute window. The tail drops off; the head "
-            "is labeled Now. An open sit: the line grows from Start to Now for that window. "
-            "While a sit is running, Path follows it (saved sits and Last 15 minutes are disabled until End sit). "
-            "A MAC alert or a signature alert appears as you hear it, once. "
-            "A decoded latitude and longitude uses the last position that radio sent. "
-            "Anything else uses the strongest RSSI so far. "
-            "Extra attention alone does not plot unless that signature is bookmarked. Leave the page and the last draw holds until you come back. "
-            "After End sit, pick the saved sit to review a still — the head is labeled End. "
-            "An advertised track stored on that sit redraws with the walk."
+            "<b>Watch it live.</b> Leave the Path page in front while you walk or drive. "
+            "The plot redraws about every three seconds, not on every GPS fix. "
+            "The line is the same drive you see on Show live path (§5.3.4). It keeps a point every few meters, so it follows the street around a corner, and the road already driven stays where it was. "
+            "With no sit running, you are looking at a sliding 15 minutes. The tail drops off, and the head is labeled Now. "
+            "An open sit grows from Start to Now, and Path follows that sit until you end it. Saved sits and Last 15 minutes stay unavailable until then. "
+            "A MAC alert or a signature alert appears as you hear it, and only once. "
+            "If the radio sent a latitude and longitude, the mark uses the last position it sent. Anything else uses the strongest signal so far. "
+            "Extra attention by itself does not appear unless that signature is bookmarked. "
+            "Leave the page and the last drawing holds until you come back. "
+            "After you end the sit, pick the saved sit to look at the still. The head is then labeled End, and an aircraft track stored with that sit draws again with the walk."
         ),
         P(
-            "The line is this phone. The black dot is the start. The blue dot is you, at the last point. "
-            "Settings → <b>Location and Maps</b> can put where this phone is now on the lower left, as GPS or as a grid. "
-            "That line is this phone now, not the last point of the sit. "
-            "It stays put until this phone has moved. "
-            "Off leaves that corner empty. Privacy mode masks it. "
-            "Header counts alerts. "
-            "A MAC alert or a signature alert is drawn once. "
-            "A decoded latitude and longitude is the last advertised position. "
-            "Anything else is a class icon at the strongest RSSI hear-point. "
-            "A lone class icon has no number box. Tap it for that one radio. "
-            "A count, in a dark disc, is several alerts in one place. "
-            "A custom name with Alert off does not plot. Extra attention alone does not plot unless that signature is bookmarked. "
-            "The list puts the Wi-Fi or BLE icon next to the MAC. "
-            "The class icon matches the map. Observer notes sit on that row. "
-            "Live list still shows only the cyan notes chip, not the text. "
-            "Thick green is a real stop: this phone stayed within about 25 m for about 40 seconds. The rest of the drive is the plain line. Time ticks (HH:mm) sit along the path. "
-            "A red diamond is where this phone was during a GNSS detection. "
-            "The note under the map has the time, the level, and what changed. "
-            "That spot is this phone, not the source of the interference. "
-            "Tap a count for the radios there. Tap a single icon for that one radio. Tap again to close. "
-            "Tap a row in that list, or a row below, to open that radio. "
-            "The distance scale sits under the plot. The route is inset so Start/End do not sit on the frame. "
-            "GPS jumps that shoot out and back, or that imply more than about 150 km/h, are dropped from the trace."
+            "The line is this phone. The black dot is where you started, and the blue dot is you, at the last point. "
+            "Settings → <b>Location and Maps</b> can put where this phone is now in the lower left, as GPS or as a grid. "
+            "That reading is this phone now, not the last point of the sit, and it stays put until the phone has moved. "
+            "Turn it off and the corner stays empty. Privacy mode masks it."
         ),
         P(
-            "On an open or saved sit, a white dotted line is an advertised aircraft track. "
-            "A track within 2 km of this walk shares the plot. "
-            "The last advertised position is a class icon, the same as the other alerts. "
-            "Tap that icon for that one radio. "
-            "One stored fix is that icon, with no line. "
-            "When it shares a spot with other alerts, the count stands in for the icon and the popup lists every radio there. "
-            "A farther aircraft with a UAS id gets its own map under the walk, up to three, and that map lists the alert. "
-            "The operator is a person icon when that pin is within 2 km of the track. There is no word label on the map. The report says takeoff, the pilot, or a fixed point. "
+            "The header counts the alerts. A MAC alert or a signature alert is drawn once. "
+            "When the radio sent a position, the mark uses the last one it advertised. Anything else is a class icon at the strongest hear. "
+            "One radio is the icon alone, with no number on it. Several alerts in one place share a count in a dark disc. "
+            "Tap the count to see those radios, or tap a single icon for that one radio. Tap again to close. "
+            "Tap a row in that list, or a row under the map, to open the radio. "
+            "A custom name with Alert off does not appear. Extra attention by itself does not appear unless that signature is bookmarked. "
+            "Each row under the map shows the Wi-Fi or Bluetooth icon next to the address, the same class icon as the map, and any observer notes. "
+            "On the Live list those notes are only the cyan chip, not the words."
+        ),
+        P(
+            "Thick green is a real stop: this phone stayed within about 25 m for about 40 seconds. The rest of the drive is a blue line, with the time of day along it. "
+            "A red diamond is where this phone was during a GNSS detection. The note under the map has the time, the level, and what changed. That spot is this phone, not the source of the interference. "
+            "The distance scale sits under the plot, and the route is set in from the frame so Start and End are not cut off. "
+            "A GPS jump that shoots out and comes back, or one that would mean more than about 150 km/h, is left off the line."
+        ),
+        P(
+            "<b>Move around.</b> The page opens on the whole path, with north up. "
+            "Pinch to zoom in, and drag to move along the drive. The line, the alert marks, and the cameras stay inside the map while you do that. "
+            "A double-tap fits the whole path again. There is no facing button on this page. That button is on Show live path (§5.3.4). "
+            "A number on the map is several alerts in one place. Zoom in and that number opens into the separate radios, unless they are in the same place."
+        ),
+        P(
+            "<b>Cameras on this page.</b> When a camera list is on the phone and its switch is on, those marks sit on the drive line. "
+            "They are drawn larger, with a light ring, so they stay readable on top of the blue line. "
+            "A camera with a stored direction is a wedge pointed that way. With no direction stored, it is a dot. Loading the lists, and the spoken alerts, are §5.7.2. "
+            "Scroll to the bottom of the page, under the radios that alerted. The heading is Known cameras on path. "
+            "The line under it says Within about 150 m. "
+            "Each row is a colored dot and a name: Flock, Other plate readers, Speed cameras, Red lights, or Other cameras. "
+            "Under the name, one line is how many faced the path, and the next is how many were on the path with no direction. A zero is still shown. "
+            "Gunshot detectors are left off this list, and so is a camera whose stored direction pointed away. "
+            "You will not see the heading when the lists are not on the phone, or when the layer switch is off. "
+            "If none were along the path, the page says No listed camera was along this path."
+        ),
+        P(
+            "On an open sit or a saved sit, a white dotted line is a track the aircraft advertised. "
+            "If that track stays within 2 km of this walk, it shares the plot. The last advertised position is a class icon, the same as the other alerts, and a tap opens that radio. One stored fix is the icon alone, with no line. "
+            "When the aircraft shares a spot with other alerts, the count stands in for the icon, and the list names every radio there. "
+            "An aircraft farther away, if it has a UAS id, gets its own map under the walk. You can have up to three of those, and each one lists the alert. "
+            "The operator is a person icon when that pin is within 2 km of the track. There is no word on the map. The report says whether the point was takeoff, the pilot, or a fixed position. "
             "A position with no UAS id stays in the sit report when it is far from the walk. "
             "Sits recorded before the trail was stored keep a single last position. "
-            "Last 15 minutes marks the current advertised position and does not keep a track. "
-            "These positions were broadcast by the radio."
+            "The last 15 minutes marks the current advertised position and does not keep a track. These positions were broadcast by the radio."
         ),
         P(
-            "This page stays the whole path, with north up. It has no facing button and no double-tap zoom. Those are on Show live path (§5.3.4). "
-            "Settings → <b>Online place names and maps</b> (on by default) also loads the map under this plot when the phone has internet. The picture is the one chosen on Settings → <b>Location and Maps</b>. "
-            "OpenStreetMap is the start. USGS Imagery and USGS Topo cover the United States. "
-            "A map marked Key also covers the world and uses a key kept on this phone. "
-            "Tiles fill the plot box, then clip; extra map shows around the route. "
-            "Offline or no tiles: the north-up plot only. OpenStreetMap and the USGS maps show no error dialog. "
-            "A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. "
-            "Airplane mode is fine. Privacy mode does not hide this map. "
-            "Turn that switch off to keep streets out of Debrief/AI Export and maps off Path together."
+            "With <b>Online place names and maps</b> on, and the phone online, the map you chose under Location and Maps sits under the line. "
+            "OpenStreetMap is the start. The USGS maps cover the United States. FAA VFR Sectional is a United States chart and is not for navigation. "
+            "Shaded relief and hydrography can sit on top of that picture, and both cover the United States. "
+            "Known cameras and detectors draw when that list is on the phone and its switch is on (§5.7.2). "
+            "A map marked Key covers the world and uses a key kept on this phone. "
+            "The pictures fill the plot and then clip, so a little of the map shows around the route. "
+            "Offline, or with no pictures saved, you get the north-up line alone. "
+            "OpenStreetMap, the USGS maps, and FAA VFR Sectional do not pop up an error. A key map does, when the key is missing, the service rejects it, or the picture does not load. "
+            "Airplane mode is fine, and Privacy mode does not hide this map. "
+            "Turn Online place names and maps off when you want the streets out of Debrief and AI Export, and the maps off this page, at the same time."
         ),
         P(
-            "Debrief PDF and Compare PDF include a letter-size operator-path figure of the same walk, "
-            "full width of the report frame. When Online place names and maps is on "
-            "and the phone is online, the map from Settings → Location and Maps fills that frame the same way Reports → Path does. "
-            "The lower right names the map. "
-            "Thick green is a real stop. A MAC alert or a signature alert is drawn once, the same radios as Reports → Path. "
-            "A decoded latitude and longitude is the last advertised position. Anything else is the strongest hear. "
-            "Extra attention is red, a MAC alert is blue, and a signature alert with neither is green. "
-            "A red diamond is a GNSS detection where this phone was. The Path key under the figure has the time, the level, and what changed. "
-            "It does not say where the interference came from. "
-            "Stacked radios at one place share a Path-key number. "
-            "An advertised aircraft on that figure is the drone class icon in the Path key, not a number, with the live status, UAS id, last position, grid, distance and bearing from where this phone was when that position was heard, motion, and the operator position when the radio sent one. "
-            "Privacy mode masks the MAC tail, the UAS id, the grid, and those coordinates in that key and in the Aircraft section. Altitude, course, and speed stay. Distance and bearing stay off. The track still draws. "
-            "The letter figure draws that advertised track as a black dotted line, "
-            "with a class icon at the last position. The operator is a person icon, with no word on the figure. "
-            "Offline: the north-up trace only. Compare overlays this sit "
-            "(solid) and the second sit (dashed) when both have enough GPS samples. "
-            "This sit’s advertised track is black dots. The second sit’s is blue dots. Caption stays inside the panel outline."
+            "A Debrief PDF and a Compare PDF include a letter-size picture of the same walk, across the full width of the page. "
+            "When Online place names and maps is on and the phone is online, that frame uses the map from Location and Maps, the same way this page does. The lower right names the map. "
+            "Thick green is a real stop. A MAC alert or a signature alert is drawn once, the same radios as on Reports → Path. "
+            "A position the radio sent is the last one it advertised. Anything else is the strongest hear. "
+            "Extra attention is red, a MAC alert is blue, and a signature alert that is neither of those is green."
+        ),
+        P(
+            "A red diamond is a GNSS detection where this phone was. The Path key under the figure has the time, the level, and what changed. It does not say where the interference came from. Radios stacked in one place share a number in that key. "
+            "An advertised aircraft is the drone class icon in the Path key, not a number. The key also has the live status, the UAS id, the last position, the grid, the distance and bearing from where this phone was when that position was heard, the motion, and the operator position when the radio sent one. "
+            "Privacy mode masks the MAC tail, the UAS id, the grid, and those coordinates, both in that key and in the Aircraft section. Altitude, course, and speed stay. Distance and bearing are left off. The track still draws. "
+            "On the printed figure the advertised track is a black dotted line, with a class icon at the last position. The operator is a person icon, and there is no word on the figure. "
+            "Offline, the figure is the north-up trace only. "
+            "Compare draws this sit as a solid line and the second sit as a dashed line when both have enough GPS. The advertised track for this sit is black dots, and the second sit uses blue dots. The caption stays inside the frame."
         ),
         P("Compare sits", "h3"),
         figure_wrap(
@@ -2221,21 +2260,21 @@ def story():
             "<b>Places</b> — On by default, under Tag detections with GPS. A tracker that keeps its address is listed on its page and in the sit report when this phone hears it at two or more places in the last 7 days. Each radio keeps the latest 8 stops. A ninth confirmed stop drops the oldest. Hearing it many times at one stop is still one stop. A single jumped fix does not erase an older stop. A return after about 20 quiet minutes is listed on its page for a day. Times are when this phone heard it, with the date when the stop is not today. Each stop includes where this phone was. Online place names adds the street. A radio that changes its address is skipped. Ordinary Wi-Fi and Bluetooth stay off. A radio heard the whole way between stops stays with Moving with you and is left out of this list. No beep and no TAK marker. Not part of Export settings. Full write-up: §5.10.",
             "<b>GNSS interference</b> — Calibrate this phone once before the check will turn on. The result stays on this phone and is not part of Export settings. Full write-up: §5.9.",
             "<b>TAK / CoT feed</b> — Off by default. UDP Cursor-on-Target to ATAK / WinTAK / iTAK. Destination chips: This phone (127.0.0.1:10011), LAN multicast (239.2.3.1:6969), Custom. UDP only — a TAK server’s TCP 8087 is not this feed. Heard-here pins sit at operator GPS at the loudest hear (closest approach) and are labeled (here). Advertised lat/lon (stock Remote ID) sit on the aircraft; sticky UAS ID keeps one moving marker; a decoded operator location is a second pin. The callsign says takeoff, the pilot, or a fixed point. Location heading and speed go in the ATAK track when present. Wi-Fi Remote ID (vendor IE FA:0B:BC) can pin the aircraft the same way as BLE FFFA on Android 11+. A radio that leaves keeps its name for How long a spot stays (1 hour unless you change it). This phone’s marker still refreshes about every 2 minutes. Turning the feed off, or Privacy mode on, takes those radio spots off the map. Settings shows last send. What to send chips: Extra attention (on), Payload location (on), Watchlist (off), All signatures (off). GNSS is Off, While alerting, Red line, or Any hit. A GNSS hit also puts a pin or an ellipse on the map where this phone was. A short hit is a pin. A longer hit is an ellipse from the start to the last place it was heard, half as wide as it is long. How long that mark stays is 1 hour, 6 hours, 24 hours, or until deleted. Floods is Off or On and only adds a line to this phone’s marker. The mark, the ellipse, and the hold are §5.8.13. Floods are §5.8.12. Privacy mode pauses the feed. Full configuration: §5.8. Sit: §12.15.",
-            "<b>Online place names and maps</b> — On by default. One switch, on Location and Maps. Debrief, Places, and AI Export reverse-geocode GPS stamps (system geocoder). Reports → Path and Show live path load the map chosen on that same page (no Fieldwatch cloud). OpenStreetMap is the start. USGS Imagery and USGS Topo cover the United States and do not ask for a key. A map marked Key covers the world. Paste the key from that account (§5.7.1). It stays on this phone and is left out of Export settings. Offline, no geocoder, or no tiles: Debrief and Places keep the coordinates, and the path stays the north-up plot. OpenStreetMap and the USGS maps show no error dialog. A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. Privacy mode does not hide that map, and it masks coordinates and leaves streets off. Turn off to keep streets and map tiles out of reports, Places, Path, and the live band together. Generate buttons are on Reports (§5.6, §5.6.1). The live band is §5.3.4.",
-            "<b>Map and Position</b> — On Location and Maps, under Online place names and maps. Map chooses the picture. OpenStreetMap is the start and covers the world. USGS Imagery and USGS Topo cover the United States. Esri, MapTiler, Stadia, and Thunderforest cover the world, and those rows show Key. The key field appears only for a Key row. One key covers every style from that company. Export settings leaves it out. How to get a key and paste it: §5.7.1. Show live path, Reports → Path, and the path figure use that picture. Online place names and maps has to be on, or the page says to turn it on and the plot stays plain. The small line in the corner names the map. Position is Off, GPS, or Grid. GPS or Grid shows where this phone is now on the lower left. Off leaves that corner empty. The saved path figure leaves that corner empty. §5.3.4, §5.6.1.",
+            "<b>Online place names and maps</b> — On by default. One switch, on Location and Maps. Debrief, Places, and AI Export reverse-geocode GPS stamps (system geocoder). Reports → Path and Show live path load the map chosen on that same page (no Fieldwatch cloud). OpenStreetMap is the start. The USGS maps cover the United States and do not ask for a key. FAA VFR Sectional is a United States chart, does not ask for a key, and is not for navigation. A map marked Key covers the world. Paste the key from that account (§5.7.1). It stays on this phone and is left out of Export settings. Offline, no geocoder, or no tiles: Debrief and Places keep the coordinates, and the path stays the north-up plot. OpenStreetMap, the USGS maps, and FAA VFR Sectional show no error dialog. A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. Privacy mode does not hide that map, and it masks coordinates and leaves streets off. Turn off to keep streets and map tiles out of reports, Places, Path, and the live band together. Generate buttons are on Reports (§5.6, §5.6.1). The live band is §5.3.4.",
+            "<b>Map and Position</b> — On Location and Maps, under Online place names and maps. Map chooses the picture. Under that list, Overlays can add USGS Shaded Relief and USGS Hydrography on top. Both cover the United States. Leave both off for the map alone. Under Overlays, Layers has two switches. License plate reader cameras and Other sensors are separate downloads. Neither list comes with the app. How to load each one, update it later, and hear those marks along with radios this phone detects is §5.7.2. OpenStreetMap is the start and covers the world. The USGS maps cover the United States. FAA VFR Sectional is a United States chart and is not for navigation. A view that is too wide for that chart asks you to zoom in. Esri, MapTiler, Stadia, and Thunderforest cover the world, and those rows show Key. The key field appears only for a Key row. One key covers every style from that company. Export settings leaves it out. How to get a key and paste it: §5.7.1. Show live path, Reports → Path, and the path figure use that picture. Online place names and maps has to be on, or the page says to turn it on and the plot stays plain. The small line in the corner names the map. Position is Off, GPS, or Grid. GPS or Grid shows where this phone is now on the lower left. Off leaves that corner empty. The saved path figure leaves that corner empty. §5.3.4, §5.6.1.",
             "<b>Logging</b> — Write to disk, rotate size, Stale after slider (when a radio is marked gone). The rotating file is JSON lines. Format (CSV, JSON lines, GPX, KML, WiGLE), radios (Both / Wi-Fi / BLE), Share, Save, the line and disk counts, and Reset / clear log are on Reports → Log Export.",
             "<b>Allow background usage</b> — Switch. Opens Fieldwatch’s Battery page; turn on Allow background usage so the OS may run the scan when Fieldwatch is not in front. Follows that Android setting. Not Keep screen on.",
             "<b>Unrestricted battery</b> — Switch. Opens the Battery page. Select Unrestricted (not Optimized). Some phones (Samsung among them) do not open onto that choice — tap Allow background usage (the words, not the switch) to click through and select Unrestricted. Fieldwatch follows that grant when you return.",
             "<b>Signatures — export / import</b> — Export signatures shares a JSON pack of the whole catalog (stock plus any you added or edited, including Decode fields). Save signatures to SD card / storage… writes the same file through the system picker. Import signatures… reads a pack from another Fieldwatch. Same id or the same match rules are skipped, so importing twice does not clone the catalog. Extra rules on a stock row (for example a glob you added to Govee) merge onto the local row; a missing Decode fields map on that stock id is filled from the pack. A new name that already exists is imported as “Name (imported)”. Watchlist, filters, settings, logs, and GPS are not in the pack. A settings pack is a different file — use Import settings. Done and error both show an OK dialog. The file is <font face='Courier'>fieldwatch-signatures-YYYYMMDD.json</font>.",
             "<b>Update stock catalog from GitHub</b> — Needs internet. Pulls <font face='Courier'>dist/fieldwatch-signatures-v2.json</font> from the Fieldwatch GitHub (1.1.12+). 1.1.11 still reads <font face='Courier'>dist/fieldwatch-signatures.json</font>. Replaces stock rows, including Extra attention text. Bookmarks, Settings, muted stock rows, extra rules you added on a stock id, and signatures you added stay. Dialogs: no internet, could not reach GitHub, could not import catalog, already on the latest catalog, catalog updated. If a field map uses a decode source this APK does not know, the signature still imports and a second dialog (Signature decoding skipped) asks you to install a newer Fieldwatch APK. Offline: Import signatures from a file. A new APK still applies default watches; this button does not. Settings footer shows Catalog N under the app version.",
-            "<b>Restore default signatures &amp; presets</b> — Rewrites the catalog (stock rows, class colors, and stock Decode fields maps), stock bookmarks (Extra attention plus Drone-class), the full stock filter-chip set (including chips you long-press deleted), named radios, and the default Settings switches (Keep screen on, Tag detections with GPS, Online place names, Maps back to OpenStreetMap, Voice on with Class + signature, Jump on, TAK / CoT off, Night mode off). Saved map keys stay on the phone. This wipes custom signatures and any chips you saved. Export signatures and Export settings first if you want a backup. It is not an undo for a single rule. To drop one preset chip, long-press it on Filters. There is no second factory-settings button; this is the stock rewrite.",
+            "<b>Restore default signatures &amp; presets</b> — Rewrites the catalog (stock rows, class colors, and stock Decode fields maps), stock bookmarks (Extra attention plus Drone-class), the full stock filter-chip set (including chips you long-press deleted), named radios, and the default Settings switches (Keep screen on, Tag detections with GPS, Online place names, Maps back to OpenStreetMap with Overlays and Layers off, Voice on with Class + signature, Jump on, TAK / CoT off, Night mode off). Saved map keys stay on the phone. This wipes custom signatures and any chips you saved. Export signatures and Export settings first if you want a backup. It is not an undo for a single rule. To drop one preset chip, long-press it on Filters. There is no second factory-settings button; this is the stock rewrite.",
             "<b>Settings backup — export / import</b> — Fieldwatch-only backup for a factory reset or a new phone. Export settings shares a JSON pack; Save settings to SD card / storage… writes the same file through the system picker. Import settings… replaces Settings switches, the current filter, filter presets, named radios, and signature watches on this phone. The catalog stays (that is Export / Import signatures). Logs, GPS, already-seen for New detections only, and a map key stay out of the pack. The language choice and an imported language file stay out of the pack too. The first-run disclaimer is not overwritten, so scanning does not stop. If the file would turn the TAK / CoT feed on or change its destination, Fieldwatch asks before it imports. A file that leaves the feed and the destination as they are imports with no extra step. Importing twice is the same as once. Picking a signature pack by mistake tells you to use Import signatures. Done and error both show an OK dialog. The file is <font face='Courier'>fieldwatch-settings-YYYYMMDD.json</font>. Not a Spectre config import.",
             "<b>Show Live tour</b> — Shows the Live tour again. It points at the sliders for how Live looks. Open it opens Display and ends the tour. Skip closes it. The same card runs once, on the first Live screen, after the license on a new install. An upgrade to this version shows it once as well.",
             "<b>Diagnostics</b> — Under Show Live tour. Shows whether scanning is running, and the state of Wi-Fi, Bluetooth, Location, and GPS. What to check names anything that is off and needs to be on: Location, the location permission, Wi-Fi or Bluetooth, a refused scan, or a filter hiding the list. It does not tell you to flip Wi-Fi scanning or Bluetooth scanning while that radio is already on. Faster Wi-Fi scans, background use, unrestricted battery, and a GPS fix are not required while Fieldwatch is open. The page also lists the phone maker and model, Android version and build fingerprint, catalog, Wi-Fi and Bluetooth on or off, how old the last Wi-Fi scan is, whether BLE is running, BLE results in the last minute, Faster Wi-Fi AP scans, Allow background usage, Unrestricted battery, system Location, location permission, and how old the GPS fix is. It refreshes about once a second. Copy puts the same lines, including What to check, on the clipboard. No network names, no addresses, and no GPS coordinates. An empty Live list adds “Settings → Diagnostics” when a scan is blocked (Location off, permission missing, or neither radio is delivering). When Location is off, Live also shows a banner. Turn on opens the phone’s Location screen when that screen exists. A filter that hides the list is not a blocked scan. A quiet minute with BLE still running is not a failure.",
         ]),
         P("5.7.1 A map key", "h3"),
         P(
-            "OpenStreetMap, USGS Imagery, and USGS Topo load with no key. "
+            "OpenStreetMap, the USGS maps, and FAA VFR Sectional load with no key. "
             "The other maps are marked <b>Key</b> on the Map list. "
             "Each of those companies gives you a key from your own account. "
             "Fieldwatch does not include a key. "
@@ -2262,7 +2301,7 @@ def story():
             "Settings → Location and Maps.",
             "Turn on Online place names and maps. With that switch off, Map stays closed and the plot stays plain.",
             "Open Map.",
-            "Tap a row marked Key. Map key appears under the list. OpenStreetMap and the USGS rows do not show that field.",
+            "Tap a row marked Key. Map key appears under the list. OpenStreetMap, the USGS rows, and FAA VFR Sectional do not show that field.",
             "Paste the key. Tap Done on the keyboard, or leave the field. Fieldwatch stores it then.",
             "Open Show live path, Reports → Path, or a path figure. The picture is the map you picked. The lower right names it.",
         ]),
@@ -2272,9 +2311,115 @@ def story():
             "key for that company. The next time you pick one of its maps, the popup says the "
             "map needs a key. "
             "A missing key, a key the service rejects, or a map that does not load opens one popup. "
-            "OpenStreetMap and the USGS maps stay quiet when a picture is missing. "
+            "OpenStreetMap, the USGS maps, and FAA VFR Sectional stay quiet when a picture is missing. "
             "Restore defaults sets Map back to OpenStreetMap and leaves the keys you saved. "
             "Fig. 8 is the Settings list. The Map list and the key field are on Location and Maps."
+        ),
+        P("5.7.2 Known cameras and detectors", "h3"),
+        callout(
+            "A downloaded list, not a radio this phone heard",
+            "These marks are published places. Fieldwatch did not hear them on the air. "
+            "A missing mark is not a clean block. A mark is not proof the camera is on, and it is not a person. "
+            "Do not use the list to decide that a place is safe.",
+            "warn",
+        ),
+        P(
+            "<b>The map can show both.</b> Show live path, Hunt, and Reports → Path can draw two kinds of things at once. "
+            "Radios this phone hears are the Live list. A watched radio is a dot on the path, and Watchlist or Voice on watched signature can beep or speak. That is a detection. "
+            "Known cameras and detectors are marks from two lists you download. They are not rows on the Live list. They do not go in the log, a sit, or TAK. "
+            "Voice Alerts under each list can speak when you are moving toward one. "
+            "Leave both on if you want both. A Flock radio the phone hears is still a Live row. A Flock camera from the list is a blue mark. One pole can be both. They are not the same alert.",
+            "body_left",
+        ),
+        P(
+            "<b>Overlays are the picture.</b> On Location and Maps, under Map, Overlays can add USGS Shaded Relief and USGS Hydrography on top of the map you picked. "
+            "Both cover the United States. Leave both off for the map alone. With an overlay on, the map credit and each overlay credit are separate lines on the right. "
+            "Overlays are not cameras, and they are not these two lists.",
+            "body_left",
+        ),
+        P(
+            "<b>Two lists, loaded separately.</b> Neither list comes with the app. Each stays on this phone after it downloads. Each has its own switch and its own Update. "
+            "Online place names and maps has to be on for the street picture. The lists themselves need a connection only while they download. "
+            "License plate reader cameras is the United States plate-reader list, about 37 MB. Flock is blue. Other companies are amber. When the file names the company, the voice uses that name. "
+            "Other sensors is about 1 MB. Speed cameras are teal. Red light cameras are red. Gunshot detectors are purple dots. Other cameras are gray. "
+            "The line under Other sensors still groups them as speed cameras, red lights, gunshot detectors, and other cameras. The voice switch for the red ones says Alert for red light cameras.",
+            "body_left",
+        ),
+        figure_wrap(
+            "fig-layers.png",
+            "Fig. 8 — Location and Maps. Layers and Voice Alerts.",
+            "Settings → Location and Maps, scrolled to Layers. "
+            "Each list has its own switch, a Saved date, and Update. "
+            "Voice Alerts is under that list. The switches are on in this shot. They start off. "
+            "Clear saved maps, above Layers, deletes pictures and leaves these lists. "
+            "Overlays are further up this same page. They are not these lists.",
+        ),
+        P("<b>Load the plate-reader list.</b>", "body_left"),
+        numbered([
+            "Settings → Location and Maps.",
+            "Turn on Online place names and maps if you want streets under the marks.",
+            "Under Layers, turn on License plate reader cameras.",
+            "The phone asks before it downloads. The title is Download license plate readers. The body says it is the United States list, about 37 MB, that you can update it later, and that it stays on this phone.",
+            "Tap Download. The row shows Downloading, then Processing. When it finishes, the switch is on and the row says Saved with the date.",
+            "No connection: the phone says this download needs a connection, and the switch stays off.",
+            "If that first download fails, the phone says the download did not work, and the switch stays off. Nothing is saved.",
+        ]),
+        P(
+            "<b>Load the other list.</b> Use the same steps on Other sensors. "
+            "The title is Download other sensors. The body says about 1 MB, that you can update it later, and that it stays on this phone. "
+            "Speed cameras, red light cameras, gunshot detectors, and other cameras are in this one file. "
+            "You can load one list and leave the other off.",
+            "body_left",
+        ),
+        P(
+            "<b>Update them from time to time.</b> The lists do not refresh by themselves. When you want a newer copy, open Location and Maps and tap Update on that row. The layer switch has to be on. The phone needs a connection. "
+            "If the published file has not changed, the row says this layer is already up to date. "
+            "If it has changed, the phone asks before it downloads. Downloading and Processing run again, and the row shows the new Saved date. "
+            "If that download fails, the phone says the download did not work and the saved copy is unchanged. The marks you already have stay. "
+            "An older plate-reader file that holds only Flock cameras asks you to update so the list includes every plate reader. "
+            "Turning a layer off hides its marks. The file stays. Turning it back on does not download again. "
+            "Clear saved maps deletes map pictures. It does not delete these lists. "
+            "Restore defaults turns the layer switches off. The files stay. Turn a switch on again and the marks come back without a new download.",
+            "body_left",
+        ),
+        P(
+            "<b>How a mark is drawn.</b> A camera with a stored direction is a wedge pointed that way. With no direction stored, it is a dot, and every gunshot detector is a dot. "
+            "A group of one kind keeps that color. Far enough out, a crowd can show as a count instead. Night mode leaves these colors alone. "
+            "You see the marks on Show live path, on Hunt under the heat once that walk is on a map, and on Reports → Path. While Hunt says No GPS yet, the marks stay off. "
+            "On the path page, the printed path, and Show live path the marks are larger, with a light ring, so they stay readable on top of the blue line. Alert dots on Show live path sit on that line the same way. Hunt keeps the smaller marks. "
+            "The path in a Debrief draws the cameras that report counts. Compare does not add this camera list to the second sit.",
+            "body_left",
+        ),
+        P(
+            "<b>Known cameras on the path page.</b> Under the radios that alerted, Reports → Path can list Known cameras on path. "
+            "The line under that heading is the distance, within about 150 m. Each type is a colored dot, the name, and then two counts: how many faced the path, and how many were on the path with no direction. A zero is still shown. "
+            "Gunshot detectors are left out, and so is a camera whose stored direction pointed away. "
+            "You will not see the section when that list is not on the phone, or when its layer switch is off. "
+            "The sit report still counts a list that is saved, even with the switch off. "
+            "If both lists are missing, the report says the camera lists are not on this phone. If only one is missing, it names that one and counts the other. "
+            "A sit with no path does not count cameras along it. If none were along the path, the report says so. "
+            "Privacy mode does not mask a count, and the text has no coordinates.",
+            "body_left",
+        ),
+        P(
+            "<b>Voice alerts for the lists.</b> Under each list, Voice Alerts starts off. Turning one on does not hide the marks. It only speaks, and only while that layer is on. "
+            "The plate-reader switch is Alert for plate readers. The other list has Alert for speed cameras, Alert for red light cameras, Alert for gunshot detectors, and Alert for other cameras. "
+            "While you are moving, and a listed camera is about 500 m ahead and roughly in front of you, the phone speaks once. "
+            "If the file has a direction and that direction faces you, the sentence says it is looking your way. A plate reader names the company when the file has one. A Flock camera says Known Flock camera. A red light camera says Red light camera ahead. "
+            "Along with the sentence you get a notification titled Map layer alerts, and one short vibration. This is separate from the watchlist beep. "
+            "That notice stays quiet until you are well past the camera and come back toward it. "
+            "These spoken alerts are not written into the log, a sit, the debrief, or TAK. The count in a debrief is a later look along the path. It is not this notice you just heard. "
+            "When you turn a voice switch on, the phone speaks that sentence once, so you can hear what it will say.",
+            "body_left",
+        ),
+        P(
+            "<b>Both alerts on one drive.</b> Leave Watchlist, or Voice on watched signature, on for radios the phone hears. "
+            "Leave the layer on, and the voice switches you care about on, for the downloaded lists. "
+            "A watched radio beeps or speaks when that radio is heard. A known camera speaks when you are moving toward the published spot. One does not turn the other off. "
+            "A camera the phone also hears can do both: a Live row for the broadcast, and a mark for the published place. Treat them as two observations. "
+            "The lists cover the United States, and they are incomplete. A camera with no published point is missing. A published point can be wrong or gone. "
+            "A gunshot mark is a detector on the list, not a shot Fieldwatch heard. The wedge is the stored facing, not a measurement this phone made.",
+            "body_left",
         ),
         P(
             "How the Live display row looks — View (Radar, list, timeline, hybrid, By class), Sort, "
@@ -3072,18 +3217,18 @@ def story():
     flow += [
         P("5.10 Places", "h2"),
         P(
-            "Places remembers a stable radio this phone hears at more than one stop. "
-            "The lines sit on that radio’s page, under Session, and in the sit report. "
-            "There is no beep and no TAK marker. "
-            "The coordinates are where this phone was. They are not a location from the other radio.",
+            "Places remembers a stable radio that this phone hears at more than one stop. "
+            "You will see those lines on the radio page, under Session, and again in the sit report. "
+            "There is no beep, and nothing is sent to TAK. "
+            "The coordinates are where this phone was. They are not a location reported by the other radio.",
         ),
         callout(
             "Where this phone was",
             "A stop is this phone’s GPS, about 100 m across. "
             "It is not the other radio’s position, and it is not a claim that anyone followed you.",
         ),
-        P("<b>What a stop is.</b> Stops within about 100 m are the same stop. The pin stays on the first fix there. It does not slide as you walk around. A new stop opens only after this phone has been quiet for at least 15 minutes, and only after it hears that same address twice at the new spot. One jumped GPS fix does not count. A radio heard the whole way between stops does not get a second stop. That drive stays with Moving with you.", "body_left"),
-        P("<b>Which radios.</b> A finder that keeps a public Bluetooth address, such as some Tiles. A Remote ID aircraft id. That aircraft stays one record if its Bluetooth address changes. The catalog family is not an identity. Two Tiles are two radios.", "body_left"),
+        P("<b>What a stop is.</b> Stops within about 100 m are the same stop. The pin stays on the first fix there, so it does not slide as you walk around that place. A new stop opens only after this phone has been quiet for at least 15 minutes, and only after it hears that same address twice at the new spot. One GPS fix that jumps does not count. A radio you heard the whole way between stops does not get a second stop. That drive stays with Moving with you.", "body_left"),
+        P("<b>Which radios.</b> Places is for a finder that keeps a public Bluetooth address, such as some Tiles, and for a Remote ID aircraft id. That aircraft stays one record even if its Bluetooth address changes. A catalog family is not an identity. Two Tiles are two radios.", "body_left"),
         P("Left out:", "body_left"),
         bullets([
             "A radio marked Mine.",
@@ -3091,13 +3236,60 @@ def story():
             "Bluetooth that changes its address. That covers Find My, AirTag, SmartTag, Chipolo, and most phones. Seeing the family again does not stitch those visits into one radio.",
             "A radio heard only once at a stop. The second hear is what makes the stop count.",
         ]),
-        P("<b>What you see.</b> After two stops in the last 7 days, the radio page and the sit report list them. The headline is “Seen at 3 places today” when every stop is still today, and “Seen at 3 places” when a stop is from another day. Each stop is one line. The time is the hour and minute, or a span such as 14:10–14:22 when it stayed. A stop from another day leads with the date, such as Jun 12, 14:10. Then the coordinates. If the open sit was still inside about 100 m, the sit name is on that line: Home · 14:10–14:22, then the coordinates. One stop by itself stays off the list.", "body_left"),
-        P("<b>Eight stops per radio.</b> Each radio keeps the latest 8 stops, and no more. The radio page and the sit report show those 8. When a ninth stop is confirmed, the oldest stop falls off and the new one is kept. Eight stops today replace the earlier days, oldest first. A stop also leaves when it is older than 7 days. A single jumped fix does not count, and it does not erase an older stop. There is no control to open a stop that fell off. Hearing the radio many times at the same stop is still one stop. The limit is the number of stops, not the number of hears.", "body_left"),
-        P("<b>The street.</b> When Online place names is on and the phone has internet, the system geocoder adds the street and city. Nothing is sent to a Fieldwatch server. Offline, or with that switch off, the line keeps the coordinates. Privacy mode shows masked and leaves the street off. The street is not saved. It is looked up when you open the radio page or write the sit report. A sit report names up to eight of those stops beyond the path it was already naming.", "body_left"),
-        P("<b>Heard again.</b> A gap of at least 20 minutes, on the same day or in the same open sit, adds “Heard again after 25 minutes” on the radio page. Under two hours it says minutes. Up to two days it says hours. A longer gap says days, such as “Heard again after 3 days.” Ten minutes does not count. The line stays for a day after the return. It can appear for a single stop, and it does not include coordinates. It is not its own Live filter. The sit report includes it on a row when the return was still inside that day at the end of the sit.", "body_left"),
-        P("<b>The sit report.</b> Reports → Debrief adds “Seen at more than one place” after the Moving with you callouts and before Environment, when at least one radio qualifies. A radio is listed only if it was also heard during that sit. The window is the 7 days ending when the sit ended, so a closed sit still reads. A last-15-minute report repeats a line only for a radio still heard in those 15 minutes. The return line is on those rows. AI Export pastes the sit report, so it includes the section. Share as text and the one-radio AI Export include the same lines as the radio page. Compare, Path, and Sit export do not list these stops.", "body_left"),
-        P("<b>Live.</b> Filters → Seen at more than one place keeps Live to radios you can hear right now that already have two stops. It does not clear the other filters, and it has no preset. Radios marked Mine stay off that list. New detections only hides radios already heard, so the two switches together leave Live empty. The sit report still includes them while this filter is off. Diagnostics names the filter, so it does not claim All traffic.", "body_left"),
-        P("<b>What it keeps.</b> The page, the sit report, and the file all use the last 7 days. Each radio keeps its latest 8 stops in that week. When a ninth stop is confirmed, the oldest falls off. A stop older than 7 days falls off even sooner. The file keeps about 400 radios, and the ones quiet the longest fall off. It is not part of Export settings. An ordinary update keeps the file. Uninstalling Fieldwatch deletes it. Places does not read old sits or the log. It records only while Places and Tag detections with GPS are both on, and only while a live fix is coming in. A last-known fix older than about 30 seconds is ignored. Turning Places off hides the lines and stops new recording. The file stays.", "body_left"),
+        P(
+            "<b>What you see.</b> After two stops in the last 7 days, the radio page and the sit report list them. "
+            "The headline reads “Seen at 3 places today” when every stop is still today, and “Seen at 3 places” when one of them is from another day. "
+            "Each stop is one line: the hour and minute, or a span such as 14:10–14:22 if you stayed, then the coordinates. A stop from another day leads with the date, such as Jun 12, 14:10. "
+            "If the open sit was still inside about 100 m, the sit name joins that line, as in Home · 14:10–14:22, and the coordinates follow. "
+            "One stop by itself stays off the list.",
+            "body_left",
+        ),
+        P(
+            "<b>Eight stops per radio.</b> Each radio keeps its latest 8 stops, and no more. The radio page and the sit report show those 8. "
+            "When a ninth stop is confirmed, the oldest falls off and the new one is kept. Eight stops today replace earlier days, oldest first. "
+            "A stop also leaves once it is older than 7 days. "
+            "A single jumped fix does not count, and it does not erase an older stop. There is no control to open a stop that fell off. "
+            "Hearing the radio many times at the same stop is still one stop. The limit is the number of places, not the number of hears.",
+            "body_left",
+        ),
+        P(
+            "<b>The street.</b> When Online place names is on and the phone has internet, the system geocoder adds the street and city. Nothing is sent to a Fieldwatch server. "
+            "Offline, or with that switch off, the line keeps the coordinates. Privacy mode shows masked and leaves the street off. "
+            "The street is not saved. It is looked up when you open the radio page or write the sit report. "
+            "A sit report can name up to eight of those stops beyond the path it was already naming.",
+            "body_left",
+        ),
+        P(
+            "<b>Heard again.</b> A gap of at least 20 minutes, on the same day or in the same open sit, adds a line on the radio page, such as “Heard again after 25 minutes.” "
+            "Under two hours it says minutes. Up to two days it says hours. A longer gap says days, as in “Heard again after 3 days.” Ten minutes does not count. "
+            "The line stays for a day after the return. It can appear for a single stop, and it does not include coordinates. It is not its own filter on Live. "
+            "The sit report includes it on a row when the return was still inside that day at the end of the sit.",
+            "body_left",
+        ),
+        P(
+            "<b>The sit report.</b> Reports → Debrief adds “Seen at more than one place” after the Moving with you callouts and before Environment, once at least one radio qualifies. "
+            "A radio is listed only if it was also heard during that sit. The window is the 7 days ending when the sit ended, so a closed sit still reads. "
+            "A last-15-minute report repeats a line only for a radio still heard in those 15 minutes, and the return line is on those rows. "
+            "AI Export pastes the sit report, so the section is included. Share as text, and the one-radio AI Export, include the same lines as the radio page. "
+            "Compare, Path, and Sit export do not list these stops.",
+            "body_left",
+        ),
+        P(
+            "<b>On Live.</b> Filters → Seen at more than one place keeps the Live list to radios you can hear right now that already have two stops. "
+            "It does not clear the other filters, and it has no preset. Radios marked Mine stay off that list. "
+            "New detections only hides radios you have already heard, so the two switches together leave Live empty. "
+            "The sit report still includes those radios. This filter does not change that report. Diagnostics names the filter, so it does not claim All traffic.",
+            "body_left",
+        ),
+        P(
+            "<b>What it keeps.</b> The page, the sit report, and the file all use the last 7 days. Each radio keeps its latest 8 stops in that week. "
+            "When a ninth stop is confirmed, the oldest falls off, and a stop older than 7 days falls off even sooner. "
+            "The file keeps about 400 radios. The ones that have been quiet the longest fall off. "
+            "Places is not part of Export settings. An ordinary update keeps the file. Uninstalling Fieldwatch deletes it. "
+            "Places does not read old sits or the log. It records only while Places and Tag detections with GPS are both on, and only while a live fix is coming in. A last-known fix older than about 30 seconds is ignored. "
+            "Turning Places off hides the lines and stops new recording. The file stays.",
+            "body_left",
+        ),
         P("<b>Limits.</b>", "body_left"),
         bullets([
             "Not a map of the other radio, and not a direction to it.",
@@ -4835,7 +5027,7 @@ def story():
             "and the loud radios GPS-stamped at that stay. Sitting still is one stay. A walk to a new "
             "block becomes stay → transit → stay. Coordinates are not dumped on every AP/BLE line. "
             "Settings → <b>Online place names and maps</b> (on by default) reverse-geocodes stay centroids via the "
-            "system geocoder when the phone has internet, and loads the map from Settings → Location and Maps on Reports → Path. Offline: a note, coords still print, Path stays the north-up trace. OpenStreetMap and the USGS maps show no error dialog. A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. "
+            "system geocoder when the phone has internet, and loads the map from Settings → Location and Maps on Reports → Path. Offline: a note, coords still print, Path stays the north-up trace. OpenStreetMap, the USGS maps, and FAA VFR Sectional show no error dialog. A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. "
             "Phone GPS ≠ pole or tag location."
         ),
         P(
@@ -5109,6 +5301,11 @@ def story():
             "body_left",
         ),
         P(
+            "<b>The downloaded lists are the other look.</b> Settings → Location and Maps → Layers can put published plate readers, speed cameras, red light cameras, gunshot detectors, and other cameras on the map, and can speak when you are moving toward one. "
+            "That is not a chip this phone heard. A Live row is still the broadcast. You can run both. How to load the two lists and update them is §5.7.2.",
+            "body_left",
+        ),
+        P(
             "<b>Write it down.</b> Look first, then Debrief (PDF is handy to file). Signature hits and camera flags are cues, not a pole ID. AI Export can list every camera-like row with payload decode — tell the model “§7.6.1; quiet poles exist; do not place a camera at the GPS pin.” Turn Online place names off if you do not want streets of <i>your</i> path in the paste.",
             "body_left",
         ),
@@ -5129,7 +5326,7 @@ def story():
             "new MAC, not one identity for the hour. A loud row that stays with you on a walk "
             "belongs in §12.2, not here — Debrief still writes that last-15-minute co-travel "
             "whether Hunt or a Finder-tags filter is on the screen. When you have <b>one</b> BLE candidate, open its detail → "
-            "<b>Hunt</b> (Wi-Fi has no Hunt button). Screen stays on. Hold the phone upright, out in front of you, "
+            "<b>Hunt</b> (Wi-Fi has no Hunt button). Screen stays on. Hold the phone flat, out in front of you, screen up, "
             "top pointing the way you walk, and walk slowly (§12.13). Reset this hunt after you change grip.",
             "body_left",
         ),
@@ -5150,9 +5347,11 @@ def story():
             "body_left",
         ),
         P(
-            "<b>Walk it down.</b> Hold the phone upright, out in front of you, top pointing the way you walk. "
-            "Walk slowly, one direction at a time, in a pattern: forward, back, and to both sides, so the cloud can build. "
-            "Search the brightest patch. That is where this phone heard it loudest, and the radio is usually near there. "
+            "<b>Walk it down.</b> Hold the phone flat, out in front of you, screen up, with the top pointing the way you walk. "
+            "You can start before the phone has a GPS fix. There are no streets yet, and the line reads No GPS yet. This walk is not on a map. "
+            "The number, the sparkline, and the ring still work. Two fresh fixes place about the first 20 m on the map. If you have already walked farther, the picture stays blank. The full rules are in §12.13. "
+            "Walk slowly, one direction at a time: forward, back, and out to both sides, so the cloud has something to build from. "
+            "A small ring sits on the hottest spot. Let it guide the next pass, and do not let it dictate the path. A wall can throw that spot off, so look around it and walk the pattern again. The radio is usually near the bright patch, not on the ring. "
             "Watch the big RSSI number, the sparkline, "
             "and loudest-this-hunt — not the Live display radar angle (that is a "
             "MAC hash, not north). Closer to 0 is louder here. When the number climbs, keep that heading. When it falls, stop, turn, and try "
@@ -5218,7 +5417,7 @@ def story():
                 ["List too fast to tap", "Pause. Then detail. Resume. Or Display → Subtitle None so more of the list fits without Pause."],
                 ["Fit the row to the job", "§5.3. Display is look (Title/Subtitle, extras). Filters are who. Plaza: Subtitle None. Copy MAC: Title → MAC. Channel sit: Frequency on."],
                 ["Write the sit", "§12.12. Debrief for a sit report; Sit export for that window’s roster; AI Export for a chat prompt; Log export for the session tape. Long drive: Debrief each stop (§11.4.1)."],
-                ["Walk toward one BLE / a tracker chip", "§12.8 (tracker) or §12.13 (Hunt page). Walk watching the big RSSI number; body-block turn for a candidate bearing. Not meters."],
+                ["Walk toward one BLE / a tracker chip", "§12.8 for a tracker, or §12.13 for the Hunt page. Hold the phone flat and walk a pattern, even before GPS locks. The line then says this walk is not on a map. Two fresh fixes place about the first 20 m. A longer walk stays blank. The ring guides the next pass. It is not the radio, and it is not a distance."],
                 ["Don’t know which tracker", "§12.8. Filters → Show only Finder tags, hide own kit, dwell the phone at each hide (wheels, bumpers, cabin). Top row → Hunt. Repeat. Not a clean bill."],
                 ["A “!” / card reader / pentest kit", "§12.14. Extra attention on Hobby BLE serial (not a skimmer detector) and Pineapple / Flipper / Pwnagotchi / Marauder / Porkchop. Open detail, look with your eyes. A miss is not a clean bill."],
             ],
@@ -5262,7 +5461,7 @@ def story():
                 ["Sit export", "Reports → Sit export. One row per unique radio in the selected sit (or last 15 minutes). CSV / JSON lines include matched signatures and Extra attention families. Logging can be off. GPX, KML, and GeoJSON include the operator path. The ATAK data package is a zip ATAK can import: path, hear-points, an advertised aircraft and operator pin, and a GNSS hit as a pin. Not the rotating log.", "Take this walk’s roster to a spreadsheet, Google Earth, or ATAK without the whole day’s log."],
                 ["Share as text (detail)", "Plain dump of the open radio’s detail page.", "Notes, a ticket, or to keep one MAC/payload without the whole sit."],
                 ["AI Export (detail)", "Prompt about <b>one</b> radio: dump plus registry/format decode job. Same disclaimer as sit-level AI Export.", "“What is this AP / tag / chip?” Do not use it as a following test — that is Reports → Debrief after you move."],
-                ["Hunt (detail, BLE)", "Heat cloud of where this phone heard that radio, the big RSSI number, and a hunt sparkline. Hold the phone upright, top pointing the way you walk, and walk slowly in a pattern so the cloud can build. About −45 dBm or louder means look around. Beep/Vibrate geiger tick at the bottom. Optional body-block heading. Structures shadow and reflect.", "Search the brightest patch. That is where this phone heard it loudest, and usually where the radio is. Not meters. Not a pin on the other radio. Not a following test. §12.13."],
+                ["Hunt (detail, BLE)", "A heat cloud of where this phone heard that radio, with the large RSSI number and a sparkline. Hold the phone flat, screen up, top pointing the way you walk, and walk slowly in a pattern. The circle shows how sure the place is, and it turns amber when the phone is not flat. Hunt works on any phone. A phone with a step sensor tracks the walk better. About −45 dBm or louder means look around. Before GPS locks there are no streets, and the line says this walk is not on a map. Two fresh fixes place about the first 20 m. A longer walk stays blank.", "A ring on the hottest spot guides the next pass. It is where this phone heard the radio loudest, not the radio. A wall can shift that spot. Not a distance, and not a following test. §12.13."],
             ],
             [1.45 * inch, 2.3 * inch, 2.75 * inch],
         ),
@@ -5300,58 +5499,104 @@ def story():
             "warn",
         ),
         P(
-            "<b>When to use it.</b> You already have <b>one</b> BLE row you care about "
-            "(a tag chip, a loud unnamed LE, a speaker). Open detail → Hunt. Wi-Fi APs have no "
-            "Hunt button: the OS only batches them about every 30 s (about 8 s with Faster Wi-Fi AP scans in effect — still not Hunt). Room, bag, car, one floor "
-            "are the realistic envelope. A parking garage through walls will lie.",
+            "<b>When to use it.</b> You already have one Bluetooth radio you care about: "
+            "a tag, a loud unnamed advertiser, a speaker. Open its detail page, then Hunt. "
+            "Wi-Fi access points have no Hunt button. The phone only reports them about every 30 seconds, "
+            "or about every 8 seconds with Faster Wi-Fi AP scans, and that is still too slow to walk toward. "
+            "A room, a bag, a car, or one floor is the realistic range. A parking garage heard through walls will lie to you.",
             "body_left",
         ),
-        P("<b>Setup.</b> High performance. Screen stays on on this page. Logging and GPS tagging can stay on; in a dense plaza they add work — turn them off if the needle feels late.", "body_left"),
+        P("<b>Setup.</b> Use High performance. The screen stays on while this page is open. If Android asks to recognize physical activity, allow it. That permission is what lets Hunt use the step sensor. Logging and GPS tagging can stay on. In a crowded place they add work, so turn them off if the number feels late.", "body_left"),
         P(
-            "<b>How to hold the phone.</b> Hold it upright, out in front of you, in the same hand the whole hunt. "
-            "Point the top of the phone the way you are walking. Keep the same height and the same tilt. "
-            "Do not cover the top with your palm, and do not switch hands. "
-            "Walk slowly. A slow step lets each hear land on the map. A jog skips ground. "
-            "A turn in place does not move the dot, so spinning does not build the cloud. "
-            "While you are walking, short steps follow the direction you are moving. The top of the phone is used when GPS is stuck. "
-            "Reset this hunt if you change grip, or after a body-block turn, so the walk is not compared to the spin.",
+            "<b>Built for the phone you have.</b> Hunt is designed to work with whatever motion this phone can provide. "
+            "You can hunt on any phone. The heat, the number, and the ring work the same way on each of them. "
+            "What changes is how steadily the dot follows your steps. A phone with a step sensor that reports those steps tracks the walk better, and that is the better experience with this feature. "
+            "Once that sensor has counted a step, Hunt stays with it for the rest of the hunt. "
+            "A phone with no step sensor, and a phone whose sensor is present but stays silent, still hunt. They count steps from the motion of walking. "
+            "Hunt gives the sensor about two seconds after the page opens, or after you allow the permission. If it still has not reported a step, a few strides of walking motion take over, and Hunt keeps that count even if a real step shows up later. "
+            "That count is usable. It is less steady, and the dot can hesitate. The colors of the heat are the same on every phone.",
+            "body_left",
+        ),
+        P(
+            "<b>Why the walk is finer than GPS.</b> A phone GPS fix is often only good to several meters. It can sit a step or two away from where you are, and it can jump. "
+            "That is too coarse for a room, a car, or a few steps down a hall. "
+            "Hunt fills those short moves from your steps and from the way the phone is facing. GPS does not draw each step. "
+            "Each step moves in the direction the top of the phone is pointing, which is why the grip matters. A turn in place does not move the dot, and a compass twitch that the phone itself did not turn with is ignored. "
+            "In the first 20 meters after the walk is on the map, one tight fix that disagrees with the dot moves the dot onto that fix, once. After that, a good fix only nudges the dot when it already sits inside the circle. A wild fix will not drag a long hunt across the map.",
+            "body_left",
+        ),
+        P(
+            "<b>No GPS yet.</b> You do not have to wait for a fix. Open Hunt and the picture has no streets. "
+            "A line in the middle reads No GPS yet. This walk is not on a map. "
+            "The dot is still this phone. It moves with your steps and with the way the phone is facing. "
+            "Hold it flat, screen up, in the same grip you would use once the map is there. "
+            "The circle, the heat, and the ring on the hottest spot follow that walk. "
+            "The scale at the bottom stays in meters. "
+            "The button that used to be N still switches between north up and the direction of travel. The picture stays close on you either way, and the button does not point at the radio. "
+            "The corner stays empty. There is no street name and no coordinate. "
+            "Known cameras and other sensors stay off until the streets are showing. "
+            "The large RSSI number, the sparkline, Beep, and Vibrate all keep working. They do not wait for GPS.",
+            "body_left",
+        ),
+        P(
+            "<b>When the streets come on.</b> Hunt waits for a second fresh fix that agrees with the first, and only if you are still inside about the first 20 meters. "
+            "It then places that whole short walk on the map. The dot lands on the agreeing fix, and the steps you already took, with the hears along them, stay behind the dot. The line goes away. "
+            "If you have already walked past about 20 meters, the walk stays on the blank picture. A fix that arrives later leaves it there, and the line stays until the streets are actually showing. "
+            "Leave Hunt and open the same radio again, and that blank walk continues. Reset this hunt starts a new one. So does opening Hunt on a different radio.",
+            "body_left",
+        ),
+        P(
+            "<b>How to hold the phone.</b> Hold it flat, out in front of you, screen up, and keep it in the same hand for the whole hunt. "
+            "Point the top of the phone the way you are walking, and do not change that grip. "
+            "Do not tip it up, cover the top with your palm, or switch hands. "
+            "Walk slowly. A slow step gives each hear a place to land. A jog skips ground. "
+            "Spinning in place does not move the dot, so it does not build the cloud. "
+            "If you change grip, or after a body-block turn, tap Reset this hunt. Otherwise the next steps get compared with that spin.",
+            "body_left",
+        ),
+        P(
+            "<b>The circle around you.</b> The dot is this phone. The circle around it shows how sure that place is. "
+            "It starts at about four meters and grows slowly as you walk farther, because each step adds a little uncertainty. A long hunt has a wider circle. "
+            "While the phone is flat, the circle stays a bright cyan, the same color as the center of the dot. "
+            "Tip the phone up and leave it that way for a moment, and the circle turns amber. Steps pause while it is amber, and the dot stays put. "
+            "Lay the phone flat again. The circle returns to cyan, and the steps resume. "
+            "Once the walk is on the map, the reading in the lower left matches the dot. Privacy mode shows masked in that corner. Before the streets are on, that corner stays empty.",
             "body_left",
         ),
         figure_wrap(
             "fig-hunt.png",
             "Fig. 5 (repeated) — Hunt.",
-            "<b>Walk a pattern.</b> Cross the room, the car, or the floor in a loop: forward, back, and to both sides. "
-            "Walk slowly. Watch the heat cloud, the big RSSI number, the sparkline, and loudest-this-hunt. Closer to 0 is louder here. "
-            "One place you stand paints one patch. Keep moving so the colors can separate. "
-            "Blue is a weak hear. Red is a powerful one. The bar on the map reads Weak, Moderate, Strong, and Powerful. "
-            "The colors between them run cyan, green, yellow, and orange. "
-            "The walk connects the hears, and the color changes smoothly from one to the next. "
-            "Close parts of the walk fill in between the lines. A far gap stays open. "
-            "If the cloud is all one color, cover more ground before you decide. "
-            "<b>Where to look.</b> Walk toward the warmer color and keep the same slow pattern. "
-            "The brightest patch is where this phone heard it loudest. The loudest mark sits in that patch. "
-            "Search there. The radio is usually near that spot, because the signal is strongest close to the radio. "
-            "The patch is the hear, not a pin on the other radio, and not a distance in meters. "
-            "A wall or a piece of metal can put the bright spot a step or two off the radio. Look around the patch, then walk the pattern again. "
-            "The map stays close on you. While GPS is moving, short steps follow that direction. The top of the phone is used when GPS is stuck. A turn in place does not move the dot. "
-            "Beep / Vibrate sit under Reset and Back (off until you turn them on): a geiger tick on last-heard RSSI — "
-            "faster when louder, quiet when there is no packet or the radio has left. Raise media volume if you chose Beep and hear nothing. "
-            "About −45 dBm or louder means look here — pocket, bag, in-hand — not a tape measure. "
-            "Pause when the packets stop. It may be a wall, not the wrong way. If it leaves the Live display, the MAC likely rotated or left — "
-            "back to the Live display, pick the new row if it is the same family, start Hunt again. Do not convert dBm to feet.",
+            "Fig. 5 shows a hunt that already has a map. Before GPS locks, this same page is blank, and the line reads No GPS yet. This walk is not on a map. How that picture works is just above.",
+            "<b>Walk a pattern.</b> Cross the room, the car, or the floor in a loop: forward, back, and out to both sides. "
+            "Walk slowly, and watch the heat, the large RSSI number, the sparkline, and loudest-this-hunt. Closer to 0 is louder where you are. "
+            "Standing in one spot paints one patch. Keep moving so the colors can separate. "
+            "Blue is a weak hear and red is a powerful one. The bar on the map reads Weak, Moderate, Strong, and Powerful, with cyan, green, yellow, and orange between them. "
+            "Each hear joins the last, and the color changes smoothly along the walk. Short gaps fill in. A long gap stays open. "
+            "If the cloud is all one color, cover more ground before you decide where to look.",
+            "<b>Where to look.</b> Walk toward the warmer color, and keep the same slow pattern. "
+            "The brightest patch is where this phone heard the radio loudest. Hunt puts a small ring on that spot. "
+            "Let the ring guide the next pass. Do not let it dictate the path. "
+            "The ring marks the hear. It is not the radio, and it is not a distance in meters. The radio is usually nearby, because the signal is strongest close to it. "
+            "A hot reflection off a wall, a car, or a metal door can set the ring a step or two to the side. Look around that spot, then walk the pattern again. "
+            "If the ring stays, search there. If it jumps, it was a bounce. "
+            "The map stays close on you, and turning in place does not move the dot.",
+            "Beep and Vibrate sit under Reset and Back. Both stay off until you turn them on. "
+            "They tick on the last strength the phone heard, faster when the signal is louder, and they go quiet when there is no packet or the radio has left. "
+            "If you turned Beep on and hear nothing, raise the media volume. "
+            "About −45 dBm or louder means look here, in a pocket, a bag, or your hand. It is not a tape measure. "
+            "When the packets stop, pause. You may have walked behind a wall. "
+            "If the radio leaves the Live display, the address has likely changed or the radio has left. "
+            "Go back, pick the new row if it is still the same family, and start Hunt again. Do not convert dBm to feet.",
         ),
         P(
-            "<b>Body-block heading (optional).</b> This is a different grip from the walk. For the walk, the phone stays out in front of you. "
-            "The phone has no direction finding. Your torso is a lossy "
-            "shield, the same trick as holding a whip close to the body and turning for a peak. "
-            "Stand still. Hold the phone against the center of your chest (or the same pocket "
-            "every time). Turn slowly in place through a full circle. Watch loudest-this-hunt "
-            "and the big RSSI — not the Live display radar angle (that is a MAC hash, not north). The "
-            "heading where it peaked is often the direction of least body in the path, i.e. "
-            "roughly toward the radio. Reflections, metal, and a second source can fake a peak. "
-            "Repeat the circle. Treat the heading as tens of degrees, not a compass rose. Then "
-            "Reset this hunt and walk that way watching the big RSSI number. This is not UWB Precision "
-            "Finding and not a bearing you should write as a fact.",
+            "<b>Body-block heading (optional).</b> This is a different grip from the walk. On the walk, the phone stays flat, out in front of you. "
+            "Against your chest it is not flat, so the circle may turn amber and the dot stays put. That is what you want while you turn. "
+            "The phone has no direction finding. Your torso blocks the signal from one side, the same idea as holding an antenna close to your body and turning until it peaks. "
+            "Stand still. Hold the phone against the center of your chest, or in the same pocket every time. Turn slowly through a full circle. "
+            "Watch loudest-this-hunt and the large RSSI number. Ignore the angle on the Live radar. That angle is only a seat for the address, not north. "
+            "The heading where the signal peaked is often the side with the least of you in the way, which is roughly toward the radio. "
+            "A reflection, a metal surface, or a second radio can fake that peak. Repeat the circle. Treat the heading as tens of degrees, not a compass bearing. "
+            "Then tap Reset this hunt and walk that way, watching the number. This is not UWB Precision Finding, and it is not a bearing you should write down as a fact.",
             "body_left",
         ),
         P(
@@ -5369,9 +5614,10 @@ def story():
             "body_left",
         ),
         P(
-            "<b>Must not conclude.</b> Distance. A person. That the brightest patch is a pin on the other radio. It is where this phone heard it loudest. Search there. The radio is usually near that spot, and a wall or metal can shift it. That you are safe because the packets stopped. "
-            "That two Hunts on rotating MACs were the same tag unless the payload still matches. "
-            "That the loudest heading is the true bearing when you are next to metal or a wall.",
+            "<b>What this page cannot tell you.</b> It cannot give you a distance, and it cannot name a person. "
+            "The ring is where this phone heard the radio loudest. Let it guide the next pass. It is not the radio. A reflection off a wall can place it, and although the radio is usually nearby, a wall or a piece of metal can shift it. "
+            "Packets stopping does not mean the area is clear. Two hunts on addresses that keep changing are not the same tag unless the payload still matches. "
+            "The loudest heading is not a true bearing when you are standing next to metal or a wall.",
             "body_left",
         ),
         P(
@@ -5724,7 +5970,7 @@ def story():
             ["Payload location", "TAK What-to-send chip, on by default when you turn the feed on. Selects radios with sticky advertised lat/lon. Required for stock Remote ID (no Extra attention mark). BLE FFFA and Wi-Fi FA:0B:BC both qualify."],
             ["Reports", "Bottom tab. Sits stay on this page. Using… names the sit for Path, Debrief, Sit export, and Compare. Those four open their own pages, marked by a green bar. Log Export and Signature candidates are under them. Clear log is on Log Export. AI Export is on Debrief, and again on Compare. GPS, place names, and logging on/off stay on Settings. §5.6."],
             ["Sit (named)", "Optional window of watching, started from Reports → Start sit. Path, Debrief, Compare this-sit, Sit export, and AI Export use that start/end instead of the last 15 minutes in RAM. Cap 6000 unique radios. Extra attention / payload / bookmarks / watched signatures stay when full; unnamed BLE drops first. Checkpoints to app storage about every 10 s. One at a time; keep 10 closed. Live list stays ~400. Not DF. §5.6."],
-            ["Show live path", "Display switch, off by default, above RSSI bars. A north-up map of this phone across the top of Live, with the list still underneath on By class, Strength list, Timeline, and Hybrid. Radar dims the switch and does not turn it off. The line starts where you are when the map opens and draws as soon as you move. It keeps a point every few meters, so a bend follows the street. The road already driven stays where it was. Green is a real stop, about 25 m for about 40 seconds. With no sit, the line is the later of when the switch turned on and 15 minutes ago. An open sit draws from the start of the sit. Dots are watchlist alerts. Pinch or drag holds the view. Recenter follows you again. Two zoom levels: the whole path, and a close view that keeps this phone in the center with the short side a little past about 100 m. Double-tap the map to switch zoom. Two facing modes: north up, and direction of travel. Tap the button to switch facing. Zoom stays. The picture shows which of the four you are in. Standing still keeps the last direction. A turn in place does not turn the map. Reports → Path stays north-up, with no button. §5.7.1 is the map key. Not the Reports page. §5.3.4."],
+            ["Show live path", "Display switch, off by default, above RSSI bars. A north-up map of this phone across the top of Live, with the list still underneath on By class, Strength list, Timeline, and Hybrid. Radar dims the switch and does not turn it off. The line starts where you are when the map opens and draws as soon as you move. It keeps a point every few meters, so a bend follows the street. The road already driven stays where it was. Green is a real stop, about 25 m for about 40 seconds. With no sit, the line is the later of when the switch turned on and 15 minutes ago. An open sit draws from the start of the sit. Dots are watchlist alerts. Pinch or drag holds the view. Recenter follows you again. Two zoom levels: the whole path, and a close view that keeps this phone in the center with the short side about 220 m. Double-tap the map to switch zoom. Two facing modes: north up, and direction of travel. Tap the button to switch facing. Zoom stays. The picture shows which of the four you are in. Standing still keeps the last direction. A turn in place does not turn the map. Reports → Path stays north-up, with no button. §5.7.1 is the map key. Not the Reports page. §5.3.4."],
             ["Path", "Reports page. North-up plot of this phone for the selected sit (or last 15 minutes). The line is the same driven trace as Show live path (§5.3.4). One fix draws as a single point and a length of 0. Leave the page in front to watch an open sit grow, or the last-15-minute snake move; the plot redraws about every three seconds. Black dot is the start. Blue dot is you, at the last point. MAC alerts and signature alerts are drawn once. A decoded latitude and longitude uses the last advertised position. Anything else is a class icon at the strongest RSSI. A count is several in one place. A lone class icon has no number box; tap it for that one radio. Extra attention alone does not plot unless that signature is bookmarked. The list puts the Wi-Fi or BLE icon next to the MAC. Observer notes sit on a MAC-alert row. Thick green is a real stop. Time ticks. Head labeled Now while live, End on a saved sit. On an open or saved sit, an advertised aircraft track within 2 km is a white dotted line on that plot. The letter figure draws the same track in black dots, with a class icon at the last position and a person icon for the operator. The last position is a class icon. Tap it for that one radio. A count means it shares that spot. One stored fix is that icon, with no line. The operator is a person icon. A farther aircraft with a UAS id gets its own map, up to three. Last 15 minutes stays this phone. The map from Settings → Location and Maps when Online place names and maps is on and the phone is online; offline: the trace only. The lower right names the map. Privacy mode does not hide those tiles. The Debrief and Compare path figures use those same MAC alerts and signature alerts. A decoded position is the last advertised fix. An advertised aircraft on that figure is the drone class icon in the Path key, with the live status, UAS id, last position, motion, and the operator position. Extra attention on that figure is red, a MAC alert is blue, and another signature alert is green. §5.6.1."],
             ["Sit export", "Reports page. One row per unique radio in the selected sit (or last 15 minutes). CSV / JSON lines include matched signatures and Extra attention families. Logging can be off. GPX, KML, and GeoJSON include the operator path as a track. The ATAK data package is a zip for ATAK: path, hear-points, an advertised aircraft and operator pin, and a GNSS pin. Log Export does not have those two formats. Not the rotating log. Privacy mode does not mask the file. §5.6.2."],
             ["Log export", "Reports → Log Export. Share/Save of the rotating session file (JSON lines on disk; CSV / GPX / KML / WiGLE at export). One line per hear while logging was on. Needs Write to disk. Reset / clear log is on this page. Clearing the log does not delete sits. §5.6.3, §11.6."],
@@ -5778,9 +6024,9 @@ def story():
             ["Show all radios", "Debrief page switch, off by default. Off: Debrief and Compare lead with counts and list Extra attention, a custom name, Marked mine, a bookmark, or a Compare decoded value that changed. On lists every radio. PDF draws the counts as bars. Text has the same numbers. §5.6."],
             ["Debrief (PDF)", "Same sit report as Debrief (text), letter-size typeset PDF. Same window, same unmatched-RAND hide, same counts. Disclaimer, FIELDWATCH header, numbered sections, full-width path figure, amber co-travel / Extra attention callouts, takeaway. Long trip: tap more than once (§11.4.1). Share as application/pdf."],
             ["Compare sits", "Reports page. This sit (open, selected, or last 15 minutes) vs a second saved sit. Presence counts for only in this sit, only in the second, and in both, split Wi-Fi and BLE, then by signature. A radio line when it is Extra attention, named, marked Mine, bookmarked, or its decoded value changed. Show all radios prints every kind + MAC. Text, PDF, and AI Export. Observer notes after Windows. Not a radio fix. §5.6."],
-            ["Online place names and maps", "Settings switch, on by default. Debrief, Places, and AI Export reverse-geocode GPS stamps via the system geocoder when online. Reports → Path and Show live path load the map from Settings → Location and Maps under the trace. Offline or no tiles: coordinates only, and the path stays the north-up trace. OpenStreetMap and the USGS maps show no error dialog. A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. Privacy mode does not hide that map. It masks coordinates and leaves streets off. Turn off to keep streets and maps out together. §5.3.4, §5.6.1."],
-            ["Maps", "On Settings → Location and Maps, under Online place names and maps. The map under Show live path, Reports → Path, and the path figure in Debrief and Compare. OpenStreetMap is the start and covers the world. USGS Imagery and USGS Topo cover the United States. Esri, MapTiler, Stadia, and Thunderforest cover the world, and those rows are marked Key. One key from that company’s account covers every style from that company. It stays on this phone, and Export settings leaves it out. OpenStreetMap and the USGS maps do not ask for a key. Online place names and maps has to be on. The corner of the map names the source. On Show live path, double-tap switches the whole path and a close view, and the button switches north up and direction of travel. Reports → Path stays north-up. Position can show where this phone is now on the lower left, as GPS or as a grid. Off leaves that corner empty. §5.3.4, §5.6.1, §5.7.1."],
-            ["Map key", "The key from your Esri, MapTiler, Stadia, or Thunderforest account. Settings → Location and Maps → Map, on a row marked Key. Map key appears only for those maps, and only while Online place names and maps is on. Paste it, then Done or leave the field. Letters, numbers, and . - _ only. One key per company. Switching styles from that company keeps it. Restore defaults returns the map to OpenStreetMap and leaves the keys. Missing, refused, rejected, or a map that does not load: one popup. OpenStreetMap and the USGS maps stay quiet. Left out of Export settings, the log, sit reports, PDFs, and TAK. §5.7.1."],
+            ["Online place names and maps", "Settings switch, on by default. Debrief, Places, and AI Export reverse-geocode GPS stamps via the system geocoder when online. Reports → Path and Show live path load the map from Settings → Location and Maps under the trace. Offline or no tiles: coordinates only, and the path stays the north-up trace. OpenStreetMap, the USGS maps, and FAA VFR Sectional show no error dialog. A map marked Key shows a popup when the key is missing, the service rejects it, or the map does not load. Privacy mode does not hide that map. It masks coordinates and leaves streets off. Turn off to keep streets and maps out together. §5.3.4, §5.6.1."],
+            ["Maps", "On Settings → Location and Maps, under Online place names and maps. The map under Show live path, Reports → Path, and the path figure in Debrief and Compare. OpenStreetMap is the start and covers the world. The USGS maps cover the United States. Under Map, Overlays can add USGS Shaded Relief and USGS Hydrography on that picture. Both cover the United States. License plate reader cameras and Other sensors are separate downloads. Neither list comes with the app. Load, update, colors, and the two kinds of alert are §5.7.2. FAA VFR Sectional is a United States chart and is not for navigation. A view that is too wide for that chart asks you to zoom in. Esri, MapTiler, Stadia, and Thunderforest cover the world, and those rows are marked Key. One key from that company’s account covers every style from that company. It stays on this phone, and Export settings leaves it out. OpenStreetMap, the USGS maps, and FAA VFR Sectional do not ask for a key. Online place names and maps has to be on. The corner of the map names the source. On Show live path, double-tap switches the whole path and a close view, and the button switches north up and direction of travel. Reports → Path stays north-up. Position can show where this phone is now on the lower left, as GPS or as a grid. Off leaves that corner empty. §5.3.4, §5.6.1, §5.7.1."],
+            ["Map key", "The key from your Esri, MapTiler, Stadia, or Thunderforest account. Settings → Location and Maps → Map, on a row marked Key. Map key appears only for those maps, and only while Online place names and maps is on. Paste it, then Done or leave the field. Letters, numbers, and . - _ only. One key per company. Switching styles from that company keeps it. Restore defaults returns the map to OpenStreetMap and leaves the keys. Missing, refused, rejected, or a map that does not load: one popup. OpenStreetMap, the USGS maps, and FAA VFR Sectional stay quiet. Left out of Export settings, the log, sit reports, PDFs, and TAK. §5.7.1."],
             ["New at bottom", "Display → Sort. First-seen order, oldest at top; new radios append; gone radios drop. List follows the bottom unless you scroll up."],
             ["unnamed LE", "BLE Advertised name / Name + type when there is no advertised name and no useful decode. On the subtitle the Bluetooth icon already marks LE, so the body is unnamed (not “unnamed LE” twice). Title Advertised name still shows unnamed LE. The title is the MAC unless you change it."],
             ["AI Export", "Three buttons. Reports sit: onboard Debrief + compact rates / Extra attention / Observer notes (addendum, not a roster). Reports Compare: overlap + exclusive Extra attention / Named / Observer notes. Device detail: that one radio (dump + registry decode). All paste into a chat, all open with the experimental disclaimer, all are hypotheses — not identity. Treat as sensitive."],
@@ -5790,7 +6036,7 @@ def story():
             ["Places", "Settings switch, on by default. A stable tracker heard at two or more places in the last 7 days, and a return after a quiet stretch. Lines on the radio page and in the sit report, with where this phone was. Each radio keeps the latest 8 stops. A ninth confirmed stop drops the oldest. Many hears at one stop are still one stop. A single jumped fix does not erase an older stop. A stop from another day includes the date. Online place names adds the street. Filters → Seen at more than one place limits Live to the ones you can hear now. A changing address is skipped. Ordinary Wi-Fi and Bluetooth stay off. No beep, no TAK marker. Not in Export settings. §5.5, §5.7, §5.10, §8."],
             ["Share as text", "Device-detail button. Plain dump of the open radio (identity, signal, decode, session). Not the sit report and not the rotating log."],
             ["Voice (watchlist)", "Settings → Voice on watched signature, on by default. What to say (signature watches): Class, Signature, or Class + signature. Default Class + signature. A named radio speaks its watch name instead, including a custom name from Named radios. Independent of Beep. Not Hunt. Overlapping speech is dropped. On-device TTS. Test alert plays the signature mix. Jump works with voice alone. §5.7, §10.2.1."],
-            ["Hunt", "Device-detail, BLE only. Full-screen heat cloud of where this phone heard that radio, with the big RSSI number and a sparkline. The map stays close on you. Leaving the page keeps the cloud until Reset, or until a different radio is hunted. Steps fill short moves between GPS fixes. While GPS is moving, steps follow that direction. The top of the phone is used when GPS is stuck. A turn in place does not move the dot. A tight GPS fix still recenters the walk. The lower-left reading matches the dot. The color runs from blue (weak) through cyan, green, yellow, and orange to red (powerful, about −45 dBm or louder). Hold it upright, top pointing the way you walk, and walk slowly in a pattern so the cloud can build. The brightest patch is where it was loudest. Search there. The radio is usually near that spot. Night mode leaves the cloud in its own colors. 127 is ignored. Loudest-this-hunt + hunt sparkline. Beep / Vibrate at the bottom (off by default; faster as RSSI gets louder; quiet when there is no packet or the radio has left; not the watchlist chirp, never speaks). Optional body-block turn for a crude heading (§12.13). Walls, metal, people, and floors change RSSI without a change in range. Not distance, not a pin on the other radio, not DF. The button where N was switches north up and direction of travel. The hunt map stays close on you either way. A double-tap flips the Show live path zoom. It does not point at the radio. §5.3.4. Wi-Fi omitted (OS scan throttle; Faster Wi-Fi AP scans still batch, not Hunt)."],
+            ["Hunt", "Opened from the detail page of one Bluetooth radio. A full-screen heat cloud of where this phone heard that radio, with the large RSSI number and a sparkline. The map stays close on you. License plate readers and other sensors from Layers can sit under the cloud. Leave the page and the cloud stays until Reset, or until you hunt a different radio. Steps and the way the phone is facing fill in the walk. Until GPS is ready, the page says No GPS yet. This walk is not on a map. There are no streets, the corner stays empty, and the scale stays in meters, but the dot, the circle, the heat, and the ring still move. Known cameras stay off until the streets show. Two fresh fixes place a short walk, about the first 20 m, on the map, and the steps you already took stay behind the dot. A longer walk stays off the map. Open the same radio again and that blank walk continues. Reset, or a different radio, starts over. Once the walk is on the map, GPS corrects it only when a good fix agrees. Hunt works on any phone. A phone with a step sensor tracks the walk better. A missing or silent sensor counts steps from the walking motion, which is less steady. Turning in place does not move the dot. The circle around the dot shows how sure the place is. It starts at about four meters, grows as the walk gets longer, and turns amber when the phone is not held flat. Steps pause until it is flat again. On a mapped walk, the lower-left reading matches the dot. Before that, the corner stays empty. Color runs from blue (weak) through cyan, green, yellow, and orange to red (powerful, about −45 dBm or louder). Hold the phone flat, screen up, top pointing the way you walk, and walk slowly in a pattern so the cloud can build. A small ring marks the hottest spot. Let it guide the next pass. It is where this phone heard the radio loudest, not the radio, and a wall can shift that spot. The radio is usually nearby. Night mode leaves the cloud in its own colors. A reading of 127 is ignored. Loudest-this-hunt sits with the sparkline. Beep and Vibrate are at the bottom, off by default. They tick faster as the signal gets louder, go quiet when there is no packet or the radio has left, and they never speak. An optional body-block turn gives a rough heading (§12.13). Walls, metal, people, and floors change the number without a change in range. Not a distance, not a pin on the other radio, and not direction finding. The button that used to be N switches north up and the direction of travel. A double-tap changes the Show live path zoom. It does not point at the radio. §5.3.4. Wi-Fi is left out, because the phone only reports access points in batches, even with Faster Wi-Fi AP scans."],
             ["lat / lon (log)", "CSV columns and JSON fields on each new log row when Tag detections with GPS is on and a fix exists. Operator phone at hear-time, not the other radio. Empty/null otherwise. In CSV these columns sit before vendor_ie so older files still parse."],
             ["Where you were", "Debrief / AI Export section. Operator path split into stays (~40 m) and transits. Lat/lon once per stay, optional street name, loud radios heard there. Not lat/lon on every inventory line."],
             ["Fast Pair", "Google tap-to-pair. Service UUID 0xFE2C. Catalog signature (on): Android phones and many buds. Three-byte model ID in pairing mode (Live display chip Fast Pair pairing); longer payloads are an account-key filter. Filters → Hide Fast Pair account-key drops account-key-only chips. Hide selected Fast Pair drops both. §8.1, §9.5."],
@@ -6185,6 +6431,7 @@ def story():
             ["Hunt Reset / Back to detail are hard to reach", "The page used to put a tall cue above the number.", "Reset, Back, then Beep / Vibrate sit at the bottom of Hunt. The map uses the space above the number."],
             ["The number dropped but I am walking toward it", "A wall, car, crowd, or floor is in the path; or the phone grip changed.", "Open a doorway or walk around metal and watch whether the number climbs again. Reset this hunt after a body-block turn. Do not convert dBm to feet. §12.13."],
             ["Hunt went quiet, or the radio left", "No packet for a few seconds, or the BLE address rotated off the Live display.", "Wait. If it left the Live display, pick the new row if it is still the same family. Randomized MACs do not stitch."],
+            ["Hunt starts off where I am, or the dot sticks", "GPS has not locked, the phone is not flat, or this phone has no working step sensor. A walk that is already on the map can still sit a few meters off a coarse fix.", "Before GPS locks, the page says No GPS yet. This walk is not on a map. Hold the phone flat, screen up, and walk a slow pattern. The circle starts at about four meters and grows as you walk. Amber means the phone is tilted and steps are paused. Two fresh fixes place about the first 20 m. A longer blank walk stays off the map. Allow physical activity if Android asks. Hunt works on any phone. A phone with a step sensor tracks the walk better. §12.13."],
             ["Where you were has coords but no street", "Online place names is off, or on with no internet / no geocoder.", "Expected. Stays still print lat/lon. Distance does not need internet. Turn the switch off if you want no lookup attempt."],
             ["Last fix or Debrief shows “masked” instead of lat/lon", "Privacy mode is on.", "Expected. Settings → Privacy mode hides GPS coordinates on the screen and in sit reports. Street names are omitted too. The log still has lat/lon. A TAK / CoT feed is paused. Turn Privacy mode off when you need the pin or the overlay."],
             ["The whole UI went red / I want green chips back", "Night mode is on.", "Settings → Appearance → Night mode Off. Restore defaults also turns Night mode off. Fig. 9."],
@@ -6236,9 +6483,9 @@ def story():
                 ["X", "@OGridPete"],
                 ["Document", "User Manual and Technical Documentation"],
                 ["Application ID", "app.fieldwatch"],
-                ["Software version", "1.1.31 (versionCode 41), field build of 23 October 2026"],
-                ["Document version", "1.1.31"],
-                ["Document date", "23 October 2026"],
+                ["Software version", "1.1.32 (versionCode 42), field build of 26 October 2026"],
+                ["Document version", "1.1.32"],
+                ["Document date", "26 October 2026"],
                 ["License", "MIT License (see LICENSE); third-party: NOTICE"],
                 ["Platform", "Android 10+ (minSdk 29), targetSdk 35"],
                 ["Classification", "Unclassified. Operationally sensitive if filled with site logs."],

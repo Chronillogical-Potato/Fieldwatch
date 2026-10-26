@@ -361,7 +361,7 @@ object SitDiff {
         val dots = points
         val all = tracks.flatMap { it.samples }
         val cap = if (tracks.size == 2) {
-            "Two walks on one north-up frame. Green = this sit. Slate = second sit. $pinNote"
+            "Two walks on one north-up frame. Blue = this sit. Slate = second sit. $pinNote"
         } else {
             "North-up. Line is this phone. $pinNote"
         }

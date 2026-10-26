@@ -23,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -55,6 +56,9 @@ import androidx.compose.ui.unit.sp
 import app.fieldwatch.data.PathTiles
 import app.fieldwatch.domain.GpsSample
 import app.fieldwatch.domain.HuntHeat
+import app.fieldwatch.ui.theme.nightIf
+import app.fieldwatch.domain.FlockCredit
+import app.fieldwatch.domain.FlockIndex
 import app.fieldwatch.domain.LanguageText
 import app.fieldwatch.domain.MapFrame
 import app.fieldwatch.domain.PayloadLocation
@@ -86,6 +90,10 @@ fun HuntHeatMap(
     viewport: SitPathPlot.Viewport?,
     onViewport: (SitPathPlot.Viewport?) -> Unit,
     modifier: Modifier = Modifier,
+    /** Circle around the dot, in meters. Zero hides it. */
+    uncertaintyM: Double = 0.0,
+    /** Amber circle while steps are paused. */
+    holdFlat: Boolean = false,
     /** Degrees clockwise from north. NaN keeps this frame north-up. */
     courseDeg: Double = Double.NaN,
     /** [MapFrame]. The hunt follow stays its own close window in every frame. */
@@ -94,6 +102,11 @@ fun HuntHeatMap(
     onRotate: (() -> Unit)? = null,
     /** Double-tap. The canvas also clears a held view. */
     onToggleClose: (() -> Unit)? = null,
+    flock: Boolean = false,
+    flockIndex: FlockIndex? = null,
+    flockRevision: Int = 0,
+    /** South, north, west, east of this picture, including a finger-held view. */
+    onTileWindow: ((DoubleArray) -> Unit)? = null,
 ) {
     val here = if (PayloadLocation.validCoord(hereLat, hereLon)) {
         listOf(GpsSample(0L, hereLat!!, hereLon!!))
@@ -110,13 +123,18 @@ fun HuntHeatMap(
     val density = LocalDensity.current
     val uriHandler = LocalUriHandler.current
     val labelStyle = TextStyle(fontSize = 10.sp, color = muted)
+    val night = app.fieldwatch.ui.theme.LocalNightMode.current
+    val flockCountStyle = TextStyle(fontSize = 9.sp, color = Color.Black.nightIf(night))
+    val flockGen = if (flock && flockIndex != null) flockRevision else -1
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
-    val appliedCourse = if (
-        onRotate != null && MapFrame.turns(mapFrame) && viewport == null && courseDeg.isFinite()
-    ) {
-        courseDeg
-    } else {
+    val appliedCourse = if (onRotate == null) {
         Double.NaN
+    } else {
+        MapFrame.drawnCourse(
+            mapFrame,
+            if (viewport == null) null else viewport.heldCourseDeg,
+            courseDeg,
+        )
     }
     val layout = remember(model, boxSize, viewport, appliedCourse) {
         if (boxSize.width < 8 || boxSize.height < 8) null
@@ -129,16 +147,24 @@ fun HuntHeatMap(
             courseDeg = appliedCourse,
         )
     }
+    val onTileWindowRef = remember { mutableStateOf(onTileWindow) }
+    onTileWindowRef.value = onTileWindow
+    LaunchedEffect(layout) {
+        val window = layout?.tileWindow() ?: return@LaunchedEffect
+        onTileWindowRef.value?.invoke(window)
+    }
     // Rebuild only when the trail changes. A pinch reuses this picture.
     val heat = remember(trail) { rasterHuntHeat(trail) }
     val layoutRef = remember { mutableStateOf(layout) }
     val viewportRef = remember { mutableStateOf(viewport) }
     val onViewportRef = remember { mutableStateOf(onViewport) }
+    val courseRef = remember { mutableStateOf(Double.NaN) }
     val onToggleRef = remember { mutableStateOf(onToggleClose) }
     val lastTapMs = remember { mutableLongStateOf(0L) }
     layoutRef.value = layout
     viewportRef.value = viewport
     onViewportRef.value = onViewport
+    courseRef.value = appliedCourse
     onToggleRef.value = onToggleClose
     val gestures = Modifier.pointerInput(Unit) {
         val slop = viewConfiguration.touchSlop
@@ -160,11 +186,13 @@ fun HuntHeatMap(
                     val past = abs(1f - zoomAccum) > 0.08f || panAccum.getDistance() > slop
                     if (past) {
                         armed = true
-                        moveHuntCamera(zoomAccum, panAccum, focus, layoutRef, viewportRef, onViewportRef)
+                        moveHuntCamera(
+                            zoomAccum, panAccum, focus, layoutRef, viewportRef, onViewportRef, courseRef,
+                        )
                         event.changes.forEach { it.consume() }
                     }
                 } else {
-                    moveHuntCamera(zoom, pan, focus, layoutRef, viewportRef, onViewportRef)
+                    moveHuntCamera(zoom, pan, focus, layoutRef, viewportRef, onViewportRef, courseRef)
                     event.changes.forEach { it.consume() }
                 }
             }
@@ -189,18 +217,9 @@ fun HuntHeatMap(
         Canvas(Modifier.fillMaxSize().then(gestures)) {
             val lay = layout ?: return@Canvas
             clipRect(lay.plotLeft, lay.plotTop, lay.plotRight, lay.plotBottom) {
-                tiles.forEach { tile ->
-                    runCatching {
-                        drawMapRaster(
-                            tile.bitmap.asImageBitmap(),
-                            tile.north,
-                            tile.west,
-                            tile.south,
-                            tile.east,
-                            lay.project,
-                            alpha = 0.55f,
-                        )
-                    }
+                drawMapTiles(tiles, lay.project, alpha = 0.55f)
+                if (flockGen >= 0 && flockIndex != null) {
+                    drawFlockMarks(lay, flockIndex, night, measurer, flockCountStyle)
                 }
                 heat?.let { field ->
                     drawMapRaster(
@@ -224,8 +243,14 @@ fun HuntHeatMap(
                 }
                 if (here.isNotEmpty()) {
                     val pt = lay.project(here[0].lat, here[0].lon)
-                    drawCircle(Color.White, radius = 8f, center = Offset(pt.x, pt.y))
-                    drawCircle(You, radius = 5.6f, center = Offset(pt.x, pt.y))
+                    val at = Offset(pt.x, pt.y)
+                    if (uncertaintyM > 0.0 && lay.metersPerPx > 0f) {
+                        val radiusPx = (uncertaintyM / lay.metersPerPx).toFloat()
+                        val ring = if (holdFlat) Color(0xFFFFC107) else You
+                        drawCircle(ring, radius = radiusPx, center = at, style = Stroke(2.5f))
+                    }
+                    drawCircle(Color.White, radius = 8f, center = at)
+                    drawCircle(You, radius = 5.6f, center = at)
                 }
             }
             val barW = (size.width - 32f) * lay.scaleBarFrac
@@ -289,32 +314,44 @@ fun HuntHeatMap(
                 textAlign = TextAlign.Center,
             )
         }
-        val mapCredit = tiles.firstOrNull()?.basemap
+        val mapTile = tiles.firstOrNull()
         val layForCredit = layout
-        if (mapCredit != null && layForCredit != null && boxSize.height > 0) {
+        if (layForCredit != null && boxSize.height > 0 && (mapTile != null || flockGen >= 0)) {
+            val mapCredit = mapTile?.basemap
             val bottomPad = with(density) { (boxSize.height - layForCredit.plotBottom).toDp() + 2.dp }
+            val half = with(density) {
+                ((layForCredit.plotRight - layForCredit.plotLeft) / 2f).toDp() - 4.dp
+            }.coerceAtLeast(0.dp)
+            val lines = if (mapCredit != null) {
+                mapCredit.shownCreditLines(
+                    mapCredit.cautionKey?.let { LanguageText.text(it) },
+                    mapTile.overlays,
+                    flockGen >= 0,
+                )
+            } else {
+                listOf(FlockCredit.LINE)
+            }
+            val besideCompass = onRotate != null && lines.size == 1
             val endPad = with(density) { (boxSize.width - layForCredit.plotRight).toDp() + 2.dp } +
-                if (onRotate == null) 0.dp else 52.dp
-            val link = mapCredit.creditUrl
-            Text(
-                mapCredit.credit,
+                if (besideCompass) 52.dp else 0.dp
+            val lift = if (onRotate != null && lines.size > 1) 52.dp else 0.dp
+            val link = mapCredit?.creditUrl ?: if (flockGen >= 0) FlockCredit.URL else null
+            MapCreditChip(
+                lines = lines,
+                link = link,
+                onOpen = { runCatching { uriHandler.openUri(it) } },
+                color = track,
+                textStyle = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
+                maxWidth = half,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = endPad, bottom = bottomPad)
-                    .background(surface.copy(alpha = 0.84f), RoundedCornerShape(2.dp))
-                    .clickable(enabled = link != null) {
-                        if (link != null) runCatching { uriHandler.openUri(link) }
-                    }
-                    .padding(horizontal = 4.dp, vertical = 1.dp),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, lineHeight = 11.sp),
-                color = track,
-                maxLines = 1,
+                    .padding(end = endPad, bottom = bottomPad + lift),
             )
         }
         if (onRotate != null) {
             MapCompassButton(
                 frame = mapFrame,
-                northDeg = if (viewport == null && courseDeg.isFinite()) courseDeg else Double.NaN,
+                northDeg = appliedCourse,
                 onClick = onRotate,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp),
             )
@@ -422,11 +459,21 @@ private fun rasterHuntHeat(trail: List<GpsSample>): HuntHeatField? {
     val rows = ceil(spanN / cell).toInt().coerceIn(1, MAX_HEAT_PX)
     val count = cols * rows
     val sumW = FloatArray(count)
-    val sumL = FloatArray(count)
+    val sumHw = FloatArray(count)
+    val sumHl = FloatArray(count)
     val peak = FloatArray(count)
+    val minDist = FloatArray(count) { Float.POSITIVE_INFINITY }
     val blob = HuntHeat.RIBBON_M
     val linked = BooleanArray(hears.size)
-    fun paint(e0: Double, n0: Double, l0: Float, e1: Double, n1: Double, l1: Float) {
+    fun visit(
+        e0: Double,
+        n0: Double,
+        l0: Float,
+        e1: Double,
+        n1: Double,
+        l1: Float,
+        onDab: (index: Int, cover: Float, dist: Double, heard: Float) -> Unit,
+    ) {
         val dx = e1 - e0
         val dy = n1 - n0
         val len2 = dx * dx + dy * dy
@@ -444,11 +491,23 @@ private fun rasterHuntHeat(trail: List<GpsSample>): HuntHeatField? {
                 val dist = hypot(ce - (e0 + u * dx), cn - (n0 + u * dy))
                 val w = HuntHeat.ribbonWeight(dist)
                 if (w <= 0f) continue
-                val i = base + col
-                sumW[i] += w
-                sumL[i] += w * HuntHeat.alongLevel(l0, l1, u)
-                if (w > peak[i]) peak[i] = w
+                onDab(base + col, w, dist, HuntHeat.alongLevel(l0, l1, u))
             }
+        }
+    }
+    fun nearest(e0: Double, n0: Double, l0: Float, e1: Double, n1: Double, l1: Float) {
+        visit(e0, n0, l0, e1, n1, l1) { i, _, dist, _ ->
+            if (dist < minDist[i]) minDist[i] = dist.toFloat()
+        }
+    }
+    fun paint(e0: Double, n0: Double, l0: Float, e1: Double, n1: Double, l1: Float) {
+        visit(e0, n0, l0, e1, n1, l1) { i, w, dist, heard ->
+            val extra = (dist - minDist[i]).coerceAtLeast(0.0)
+            val hw = HuntHeat.mixWeight(HuntHeat.shadeWeight(extra), heard)
+            sumW[i] += w
+            sumHw[i] += hw
+            sumHl[i] += hw * heard
+            if (w > peak[i]) peak[i] = w
         }
     }
     for (h in 1 until hears.size) {
@@ -456,15 +515,6 @@ private fun rasterHuntHeat(trail: List<GpsSample>): HuntHeatField? {
         if (!HuntHeat.connects(dist)) continue
         linked[h] = true
         linked[h - 1] = true
-        paint(
-            east[h - 1], north[h - 1], hears[h - 1].second,
-            east[h], north[h], hears[h].second,
-        )
-    }
-    for (h in hears.indices) {
-        if (linked[h]) continue
-        val level = hears[h].second
-        paint(east[h], north[h], level, east[h], north[h], level)
     }
     val close = HuntHeat.CLOSE_M
     val bins = HashMap<Long, MutableList<Int>>()
@@ -474,25 +524,42 @@ private fun rasterHuntHeat(trail: List<GpsSample>): HuntHeatField? {
         val by = floor(north[h] / close).toInt()
         bins.getOrPut(binKey(bx, by)) { ArrayList() }.add(h)
     }
-    for (h in hears.indices) {
-        val bx = floor(east[h] / close).toInt()
-        val by = floor(north[h] / close).toInt()
-        for (oy in -1..1) {
-            for (ox in -1..1) {
-                val list = bins[binKey(bx + ox, by + oy)] ?: continue
-                for (j in list) {
-                    if (j <= h) continue
-                    val dist = hypot(east[j] - east[h], north[j] - north[h])
-                    if (!HuntHeat.bridges(dist)) continue
-                    if (j == h + 1 && HuntHeat.connects(dist)) continue
-                    paint(
-                        east[h], north[h], hears[h].second,
-                        east[j], north[j], hears[j].second,
-                    )
+    fun eachStroke(draw: (Double, Double, Float, Double, Double, Float) -> Unit) {
+        for (h in 1 until hears.size) {
+            val dist = hypot(east[h] - east[h - 1], north[h] - north[h - 1])
+            if (!HuntHeat.connects(dist)) continue
+            draw(
+                east[h - 1], north[h - 1], hears[h - 1].second,
+                east[h], north[h], hears[h].second,
+            )
+        }
+        for (h in hears.indices) {
+            if (linked[h]) continue
+            val level = hears[h].second
+            draw(east[h], north[h], level, east[h], north[h], level)
+        }
+        for (h in hears.indices) {
+            val bx = floor(east[h] / close).toInt()
+            val by = floor(north[h] / close).toInt()
+            for (oy in -1..1) {
+                for (ox in -1..1) {
+                    val list = bins[binKey(bx + ox, by + oy)] ?: continue
+                    for (j in list) {
+                        if (j <= h) continue
+                        val dist = hypot(east[j] - east[h], north[j] - north[h])
+                        if (!HuntHeat.bridges(dist)) continue
+                        if (j == h + 1 && HuntHeat.connects(dist)) continue
+                        draw(
+                            east[h], north[h], hears[h].second,
+                            east[j], north[j], hears[j].second,
+                        )
+                    }
                 }
             }
         }
     }
+    eachStroke(::nearest)
+    eachStroke(::paint)
     val pixels = IntArray(count)
     for (i in 0 until count) {
         val weight = sumW[i]
@@ -501,7 +568,9 @@ private fun rasterHuntHeat(trail: List<GpsSample>): HuntHeatField? {
         if (fade < 0.04f) continue
         val a = (fade * 208f).toInt().coerceIn(0, 208)
         if (a == 0) continue
-        val argb = HuntHeat.colorArgb(sumL[i] / weight)
+        val heatW = sumHw[i]
+        val level = if (heatW > 1e-4f) sumHl[i] / heatW else 0f
+        val argb = HuntHeat.colorArgb(level)
         val pr = ((argb ushr 16) and 0xFF) * a / 255
         val pg = ((argb ushr 8) and 0xFF) * a / 255
         val pb = (argb and 0xFF) * a / 255
@@ -511,7 +580,7 @@ private fun rasterHuntHeat(trail: List<GpsSample>): HuntHeatField? {
     bitmap.setPixels(pixels, 0, cols, 0, 0, cols, rows)
     val widthM = cols * cell
     val heightM = rows * cell
-    val spot = HuntHeat.hotSpot(sumW, sumL, peak, cols)
+    val spot = HuntHeat.hotSpot(sumHw, sumHl, peak, cols)
     val hotLat = spot?.let { lat0 + (maxN - it.second * cell) / mLat }
     val hotLon = spot?.let { lon0 + (minE + it.first * cell) / mLon }
     return HuntHeatField(
@@ -536,17 +605,17 @@ private fun moveHuntCamera(
     layoutRef: MutableState<SitPathPlot.Layout?>,
     viewportRef: MutableState<SitPathPlot.Viewport?>,
     onViewportRef: MutableState<(SitPathPlot.Viewport?) -> Unit>,
+    courseRef: MutableState<Double>,
 ) {
     val lay = layoutRef.value ?: return
     if ((zoom == 1f || zoom <= 0f) && pan == Offset.Zero) return
-    var next = viewportRef.value ?: SitPathPlot.viewportOf(lay)
+    var next = viewportRef.value ?: SitPathPlot.viewportOf(lay, courseRef.value)
     if (zoom > 0f && zoom != 1f && focus != Offset.Unspecified) {
         val (lat, lon) = lay.unproject(focus.x, focus.y)
         next = next.zoomAbout(zoom, lat, lon, minHalfM = HuntHeat.PINCH_HALF_M)
     }
     if (pan != Offset.Zero) {
-        val mpp = lay.metersPerPx
-        next = next.panMeters(-pan.x * mpp, pan.y * mpp)
+        next = next.panScreen(pan.x, pan.y, lay.metersPerPx, courseRef.value)
     }
     viewportRef.value = next
     onViewportRef.value(next)

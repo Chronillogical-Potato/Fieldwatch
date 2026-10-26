@@ -1,0 +1,254 @@
+package app.fieldwatch.ui.component
+
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import app.fieldwatch.domain.FlockApproach
+import app.fieldwatch.domain.FlockIndex
+import app.fieldwatch.domain.FlockMark
+import app.fieldwatch.domain.SensorKind
+import app.fieldwatch.domain.SitPathPlot
+import app.fieldwatch.ui.theme.nightIf
+import kotlin.math.atan2
+import kotlin.math.max
+import kotlin.math.PI
+
+/** Marks for saved roadside sensors. A crowd of one type keeps that color. One sensor is its own mark. */
+fun DrawScope.drawFlockMarks(
+    lay: SitPathPlot.Layout,
+    index: FlockIndex,
+    night: Boolean,
+    measurer: TextMeasurer,
+    countStyle: TextStyle,
+    /** Sit path and the live list map. Larger, with a light ring, so they read on the blue drive line. */
+    bold: Boolean = false,
+) {
+    val box = flockBox(lay) ?: return
+    val marks = index.marks(
+        box.south,
+        box.north,
+        box.west,
+        box.east,
+        project = { lat, lon ->
+            val pt = lay.project(lat, lon)
+            pt.x to pt.y
+        },
+        inside = { x, y ->
+            x in lay.plotLeft..lay.plotRight && y in lay.plotTop..lay.plotBottom
+        },
+    )
+    val metersPerPx = lay.metersPerPx.coerceAtLeast(0.05f)
+    for (mark in marks) {
+        val pt = lay.project(mark.lat, mark.lon)
+        val at = Offset(pt.x, pt.y)
+        if (mark.count > 1) {
+            drawFlockCount(at, mark, night, measurer, countStyle, bold)
+        } else {
+            drawFlockSight(at, mark, lay, metersPerPx, bold)
+        }
+    }
+}
+
+/**
+ * One sensor. A plate reader, speed camera, or red light with a direction is a 150-foot wedge,
+ * 50 degrees wide. It follows the map when the map turns. Another camera uses a shorter wedge.
+ * A gunshot detector is a dot. No stored direction means the dot only.
+ */
+private fun DrawScope.drawFlockSight(
+    at: Offset,
+    mark: FlockMark,
+    lay: SitPathPlot.Layout,
+    metersPerPx: Float,
+    bold: Boolean,
+) {
+    val paint = sightPaint(mark)
+    val minPx = if (bold) paint.minPx * 2.5f else paint.minPx
+    val fill = if (bold) paint.fill.copy(alpha = (paint.fill.alpha * 1.55f).coerceAtMost(0.72f)) else paint.fill
+    val stroke = if (bold) paint.stroke * 1.8f else paint.stroke
+    var reachPx = 0f
+    if (paint.coneM > 0.0) {
+        for (facing in mark.facings) {
+            val (lat, lon) = FlockApproach.destination(mark.lat, mark.lon, facing.toDouble(), paint.coneM)
+            val end = lay.project(lat, lon)
+            val dx = end.x - at.x
+            val dy = end.y - at.y
+            if (dx == 0f && dy == 0f) continue
+            val radius = (paint.coneM / metersPerPx).toFloat().coerceIn(minPx, paint.maxPx)
+            reachPx = max(reachPx, radius)
+            val bearing = atan2(dy.toDouble(), dx.toDouble()) * (180.0 / PI)
+            val start = (bearing - CONE_DEG / 2.0).toFloat()
+            val box = Offset(at.x - radius, at.y - radius)
+            val size = Size(radius * 2f, radius * 2f)
+            drawArc(fill, start, CONE_DEG, useCenter = true, topLeft = box, size = size)
+            drawArc(
+                paint.line,
+                start,
+                CONE_DEG,
+                useCenter = true,
+                topLeft = box,
+                size = size,
+                style = Stroke(width = stroke),
+            )
+        }
+    }
+    if (bold) {
+        val disc = 13f
+        drawCircle(Color.White, disc, at)
+        drawCircle(Color(0xFF0F172A), disc, at, style = Stroke(width = 2.4f))
+        drawCircle(markDot(mark), 8f, at)
+        return
+    }
+    val glow = if (reachPx > 0f) {
+        (reachPx * paint.glowScale).coerceIn(paint.glowMin, paint.glowMax)
+    } else {
+        (paint.dotM / metersPerPx).toFloat().coerceIn(paint.glowMin, paint.glowMax)
+    }
+    drawCircle(paint.glow, glow, at)
+    drawCircle(paint.core, glow * 0.42f, at)
+    drawCircle(Color.White, glow * 0.28f, at)
+}
+
+private fun markDot(mark: FlockMark): Color = when (mark.kind) {
+    SensorKind.SPEED -> Color(0xFF14B8A6)
+    SensorKind.RED -> Color(0xFFEF4444)
+    SensorKind.GUNSHOT -> Color(0xFFA78BFA)
+    SensorKind.CAMERA -> Color(0xFF64748B)
+    SensorKind.PLATE -> if (mark.flock) Color(0xFF3B82F6) else Color(0xFFF59E0B)
+}
+
+private data class SightPaint(
+    val fill: Color,
+    val line: Color,
+    val glow: Color,
+    val core: Color,
+    val coneM: Double,
+    val minPx: Float,
+    val maxPx: Float,
+    val stroke: Float,
+    val glowScale: Float,
+    val glowMin: Float,
+    val glowMax: Float,
+    val dotM: Double,
+)
+
+private fun countPaint(kind: SensorKind, night: Boolean): Pair<Color, Color> = when (kind) {
+    SensorKind.PLATE -> Color.White.nightIf(night) to Color.Black.nightIf(night)
+    SensorKind.SPEED -> Color(0xFF14B8A6) to Color.White
+    SensorKind.RED -> Color(0xFFEF4444) to Color.White
+    SensorKind.GUNSHOT -> Color(0xFF7C3AED) to Color.White
+    SensorKind.CAMERA -> Color(0xFF475569) to Color.White
+}
+
+private fun sightPaint(mark: FlockMark): SightPaint = when (mark.kind) {
+    SensorKind.SPEED -> SightPaint(
+        SpeedFill, SpeedLine, SpeedGlow, SpeedCore,
+        CONE_M, CONE_MIN_PX, CONE_MAX_PX, 1.7f, 0.16f, 8f, 18f, 12.0,
+    )
+    SensorKind.RED -> SightPaint(
+        RedFill, RedLine, RedGlow, RedCore,
+        CONE_M, CONE_MIN_PX, CONE_MAX_PX, 1.7f, 0.16f, 8f, 18f, 12.0,
+    )
+    SensorKind.GUNSHOT -> SightPaint(
+        GunFill, GunLine, GunGlow, GunCore,
+        0.0, CONE_MIN_PX, CONE_MAX_PX, 1.7f, 0.16f, 7f, 14f, 10.0,
+    )
+    SensorKind.CAMERA -> SightPaint(
+        CamFill, CamLine, CamGlow, CamCore,
+        CONE_M * 0.5, 10f, 90f, 1.2f, 0.10f, 4f, 9f, 7.0,
+    )
+    SensorKind.PLATE -> if (mark.flock) {
+        SightPaint(
+            ConeFill, ConeLine, ConeGlow, ConeCore,
+            CONE_M, CONE_MIN_PX, CONE_MAX_PX, 1.7f, 0.16f, 8f, 18f, 12.0,
+        )
+    } else {
+        SightPaint(
+            OtherFill, OtherLine, OtherGlow, OtherCore,
+            CONE_M, CONE_MIN_PX, CONE_MAX_PX, 1.7f, 0.16f, 8f, 18f, 12.0,
+        )
+    }
+}
+
+private fun DrawScope.drawFlockCount(
+    at: Offset,
+    mark: FlockMark,
+    night: Boolean,
+    measurer: TextMeasurer,
+    countStyle: TextStyle,
+    bold: Boolean,
+) {
+    val (fill, ink) = countPaint(mark.kind, night)
+    val measured = measurer.measure(mark.count.toString(), countStyle)
+    val radius = max(if (bold) 14f else 8f, measured.size.width / 2f + if (bold) 5f else 3f)
+    if (bold) {
+        drawCircle(Color.White, radius + 3f, at)
+        drawCircle(Color(0xFF0F172A), radius + 3f, at, style = Stroke(width = 2f))
+    }
+    drawCircle(fill, radius, at)
+    drawCircle(ink, radius, at, style = Stroke(if (bold) 1.8f else 1.2f))
+    drawText(
+        measured,
+        color = ink,
+        topLeft = Offset(at.x - measured.size.width / 2f, at.y - measured.size.height / 2f),
+    )
+}
+
+/** 150 feet. The view cone is a direction, not a measured coverage range. */
+private const val CONE_M = 150.0 * 0.3048
+private const val CONE_DEG = 50f
+private const val CONE_MIN_PX = 16f
+private const val CONE_MAX_PX = 170f
+private val ConeFill = Color(0xFF3B82F6).copy(alpha = 0.40f)
+private val ConeLine = Color(0xFF93C5FD).copy(alpha = 0.92f)
+private val ConeGlow = Color(0xFF60A5FA).copy(alpha = 0.55f)
+private val ConeCore = Color(0xFFBFDBFE)
+private val OtherFill = Color(0xFFF59E0B).copy(alpha = 0.42f)
+private val OtherLine = Color(0xFFFCD34D).copy(alpha = 0.92f)
+private val OtherGlow = Color(0xFFFBBF24).copy(alpha = 0.55f)
+private val OtherCore = Color(0xFFFDE68A)
+private val SpeedFill = Color(0xFF14B8A6).copy(alpha = 0.40f)
+private val SpeedLine = Color(0xFF5EEAD4).copy(alpha = 0.92f)
+private val SpeedGlow = Color(0xFF2DD4BF).copy(alpha = 0.55f)
+private val SpeedCore = Color(0xFF99F6E4)
+private val RedFill = Color(0xFFEF4444).copy(alpha = 0.40f)
+private val RedLine = Color(0xFFFCA5A5).copy(alpha = 0.92f)
+private val RedGlow = Color(0xFFF87171).copy(alpha = 0.55f)
+private val RedCore = Color(0xFFFECACA)
+private val GunFill = Color(0xFF8B5CF6).copy(alpha = 0.40f)
+private val GunLine = Color(0xFFC4B5FD).copy(alpha = 0.92f)
+private val GunGlow = Color(0xFFA78BFA).copy(alpha = 0.55f)
+private val GunCore = Color(0xFFDDD6FE)
+private val CamFill = Color(0xFF64748B).copy(alpha = 0.28f)
+private val CamLine = Color(0xFF94A3B8).copy(alpha = 0.70f)
+private val CamGlow = Color(0xFF64748B).copy(alpha = 0.45f)
+private val CamCore = Color(0xFFCBD5E1)
+
+private data class FlockBox(val south: Double, val north: Double, val west: Double, val east: Double)
+
+private fun flockBox(lay: SitPathPlot.Layout): FlockBox? {
+    if (lay.plotRight <= lay.plotLeft || lay.plotBottom <= lay.plotTop) return null
+    val corners = arrayOf(
+        lay.unproject(lay.plotLeft, lay.plotTop),
+        lay.unproject(lay.plotRight, lay.plotTop),
+        lay.unproject(lay.plotLeft, lay.plotBottom),
+        lay.unproject(lay.plotRight, lay.plotBottom),
+    )
+    var south = 90.0
+    var north = -90.0
+    var west = 180.0
+    var east = -180.0
+    for ((lat, lon) in corners) {
+        if (!lat.isFinite() || !lon.isFinite()) return null
+        if (lat < south) south = lat
+        if (lat > north) north = lat
+        if (lon < west) west = lon
+        if (lon > east) east = lon
+    }
+    if (north - south > 180.0) return null
+    return FlockBox(south, north, west, east)
+}

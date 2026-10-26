@@ -412,28 +412,25 @@ object Geo {
     fun stopCovers(stops: List<PathLeg>, fromAt: Long, toAt: Long): Boolean =
         stops.any { fromAt >= it.startAt && toAt <= it.endAt }
 
+    /**
+     * Fixes that stay within [stayM] of where this cluster started. The anchor
+     * stays on that first fix. Following the average lets GPS jitter on opposite
+     * sides of a parked phone split one stop, and the green stretch flips blue.
+     */
     private fun clusterFixes(samples: List<GpsSample>, stayM: Double): List<ArrayList<GpsSample>> {
         val clusters = ArrayList<ArrayList<GpsSample>>()
         var cur = arrayListOf(samples[0])
-        var cLat = samples[0].lat
-        var cLon = samples[0].lon
+        var anchorLat = samples[0].lat
+        var anchorLon = samples[0].lon
         for (i in 1 until samples.size) {
             val s = samples[i]
-            if (meters(cLat, cLon, s.lat, s.lon) <= stayM) {
+            if (meters(anchorLat, anchorLon, s.lat, s.lon) <= stayM) {
                 cur.add(s)
-                var slat = 0.0
-                var slon = 0.0
-                for (p in cur) {
-                    slat += p.lat
-                    slon += p.lon
-                }
-                cLat = slat / cur.size
-                cLon = slon / cur.size
             } else {
                 clusters.add(cur)
                 cur = arrayListOf(s)
-                cLat = s.lat
-                cLon = s.lon
+                anchorLat = s.lat
+                anchorLon = s.lon
             }
         }
         clusters.add(cur)

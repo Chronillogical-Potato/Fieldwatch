@@ -160,5 +160,10 @@ class MapKeyTest {
             """{"mapBasemap":"USGS_TOPO"}""",
         )
         assertEquals(MapBasemap.USGS_TOPO, old.mapBasemap)
+        val faa = SettingsExchange.json.decodeFromString(
+            AppSettings.serializer(),
+            """{"mapBasemap":"FAA_VFR_SECTIONAL"}""",
+        )
+        assertEquals(MapBasemap.FAA_VFR_SECTIONAL, faa.mapBasemap)
     }
 }

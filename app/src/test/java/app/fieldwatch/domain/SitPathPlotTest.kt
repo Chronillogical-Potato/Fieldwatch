@@ -166,6 +166,40 @@ class SitPathPlotTest {
     }
 
     @Test
+    fun aLineOfNearbyDetectionsStaysOneNumberWhenChained() {
+        val piled = SitPathPlot.clusters(lineOfFour(), chain = true)
+        assertEquals(1, piled.size)
+        assertEquals(4, piled.single().members.size)
+    }
+
+    @Test
+    fun aZoomedLineBreaksIntoSpotsUnlessTheyAreTheSamePlace() {
+        val open = SitPathPlot.clusters(lineOfFour(), chain = false)
+        assertEquals(2, open.size)
+        assertTrue(open.all { it.members.size == 2 })
+        val same = SitPathPlot.clusters(
+            List(3) { i ->
+                dot("$i") to SitPathPlot.Pt(40f, 40f)
+            },
+            chain = false,
+        )
+        assertEquals(1, same.size)
+        assertEquals(3, same.single().members.size)
+        val zoomed = SitPathPlot.clusters(
+            listOf(0f, 40f, 80f).map { x -> dot("z$x") to SitPathPlot.Pt(x, 0f) },
+            chain = false,
+        )
+        assertEquals(3, zoomed.size)
+        assertTrue(zoomed.none { it.stacked })
+    }
+
+    private fun dot(key: String) = SitPathPlot.Dot(key, 0.0, 0.0, key, extraAttention = false, named = true)
+
+    private fun lineOfFour() = listOf(0f, 20f, 40f, 60f).map { x ->
+        dot("d$x") to SitPathPlot.Pt(x, 0f)
+    }
+
+    @Test
     fun startLabelOpensTheDetectionItCovers() {
         val dot = SitPathPlot.Dot("a", 0.0, 0.0, "A", extraAttention = false, named = true)
         val cluster = SitPathPlot.clusters(listOf(dot to SitPathPlot.Pt(100f, 100f))).single()
@@ -756,6 +790,22 @@ class SitPathPlotTest {
     }
 
     @Test
+    fun panScreenFollowsTheFingerWhenTravelIsUp() {
+        val view = SitPathPlot.Viewport(36.0, -115.0, 400f, 400f, 90.0)
+        val up = view.panScreen(0f, -10f, 1f, 90.0)
+        assertTrue(up.centerLon < view.centerLon)
+        assertEquals(view.centerLat, up.centerLat, 1e-8)
+        assertEquals(90.0, up.heldCourseDeg, 0.0)
+        val right = view.panScreen(10f, 0f, 1f, 90.0)
+        assertTrue(right.centerLat > view.centerLat)
+        assertEquals(view.centerLon, right.centerLon, 1e-8)
+        val northUp = view.panScreen(0f, 10f, 1f, 0.0)
+        val direct = view.panMeters(0f, 10f)
+        assertEquals(direct.centerLat, northUp.centerLat, 1e-12)
+        assertEquals(direct.centerLon, northUp.centerLon, 1e-12)
+    }
+
+    @Test
     fun heldViewportKeepsTheCenter() {
         val model = SitPathPlot.Model(
             samples = listOf(
@@ -972,7 +1022,65 @@ class SitPathPlotTest {
     }
 
     @Test
-    fun aHeldViewStaysNorthUp() {
+    fun aTurnedWideMapReachesPastThePathBox() {
+        val model = SitPathPlot.Model(
+            samples = listOf(
+                GpsSample(1L, 28.90, -81.40),
+                GpsSample(2L, 29.00, -81.30),
+            ),
+            dots = emptyList(),
+            lengthM = 14_000.0,
+            spanM = 14_000.0,
+            title = "ne",
+        )
+        val lay = SitPathPlot.layout(model, 900f, 420f, courseDeg = 45.0)!!
+        val window = lay.tileWindow()
+        assertNotNull(window)
+        val south = window!![0]
+        val north = window[1]
+        val west = window[2]
+        val east = window[3]
+        val corners = listOf(
+            lay.plotLeft to lay.plotTop,
+            lay.plotRight to lay.plotTop,
+            lay.plotLeft to lay.plotBottom,
+            lay.plotRight to lay.plotBottom,
+        )
+        var outside = false
+        for ((x, y) in corners) {
+            val (lat, lon) = lay.unproject(x, y)
+            assertTrue(lat in south..north)
+            assertTrue(lon in west..east)
+            if (lat < 28.90 || lat > 29.00 || lon < -81.40 || lon > -81.30) outside = true
+        }
+        assertTrue(outside)
+    }
+
+    @Test
+    fun aHeldViewKeepsDirectionOfTravelUp() {
+        val model = SitPathPlot.Model(
+            samples = listOf(GpsSample(1L, 36.0, -115.0)),
+            dots = emptyList(),
+            lengthM = 0.0,
+            spanM = 0.0,
+            title = "held",
+        )
+        val held = SitPathPlot.Viewport(36.0, -115.0, 400f, 400f, 90.0)
+        val lay = SitPathPlot.layout(model, 400f, 400f, viewport = held, courseDeg = 90.0)!!
+        val here = lay.project(36.0, -115.0)
+        val cosLat = kotlin.math.cos(Math.toRadians(36.0))
+        val east = lay.project(36.0, -115.0 + 40.0 / (111_320.0 * cosLat))
+        assertTrue(east.y < here.y - 10f)
+        assertTrue(kotlin.math.abs(east.x - here.x) < kotlin.math.abs(here.y - east.y) / 3f)
+        val window = lay.tileWindow()
+        assertNotNull(window)
+        val (cornerLat, cornerLon) = lay.unproject(lay.plotLeft, lay.plotTop)
+        assertTrue(cornerLat in window!![0]..window[1])
+        assertTrue(cornerLon in window[2]..window[3])
+    }
+
+    @Test
+    fun aHeldViewWithoutACourseStaysNorthUp() {
         val model = SitPathPlot.Model(
             samples = listOf(GpsSample(1L, 36.0, -115.0)),
             dots = emptyList(),
@@ -981,7 +1089,7 @@ class SitPathPlotTest {
             title = "held",
         )
         val held = SitPathPlot.Viewport(36.0, -115.0, 400f, 400f)
-        val lay = SitPathPlot.layout(model, 400f, 400f, viewport = held, courseDeg = 90.0)!!
+        val lay = SitPathPlot.layout(model, 400f, 400f, viewport = held, courseDeg = Double.NaN)!!
         val here = lay.project(36.0, -115.0)
         val north = lay.project(36.001, -115.0)
         assertTrue(north.y < here.y)
@@ -989,8 +1097,22 @@ class SitPathPlotTest {
     }
 
     @Test
+    fun closeZoomMatchesASitThatHasNotMoved() {
+        val here = GpsSample(1L, 36.0, -115.0)
+        val still = SitPathPlot.Model(listOf(here), emptyList(), 0.0, 0.0, "still")
+        val fitted = SitPathPlot.layout(still, 400f, 220f)!!
+        val close = SitPathPlot.layout(
+            still,
+            400f,
+            220f,
+            followHalfM = MapFrame.CLOSE_HALF_M,
+        )!!
+        assertEquals(fitted.metersPerPx, close.metersPerPx, 0.01f)
+    }
+
+    @Test
     fun closeFollowSitsOnYouABitPastANearbyRadio() {
-        assertEquals(120f, MapFrame.CLOSE_HALF_M, 0.01f)
+        assertEquals(SitPathPlot.MIN_HALF_SPAN_M * SitPathPlot.FIT_PAD, MapFrame.CLOSE_HALF_M, 0.01f)
         assertTrue(MapFrame.CLOSE_HALF_M > CoTravel.NEAR_M.toFloat())
         val start = GpsSample(1L, 36.0, -115.0)
         val here = GpsSample(2L, 36.01, -115.0)
@@ -1033,10 +1155,10 @@ class SitPathPlotTest {
     }
 
     @Test
-    fun aHeldCloseViewStaysNorthUp() {
+    fun aHeldCloseViewKeepsDirectionOfTravelUp() {
         val here = GpsSample(1L, 36.0, -115.0)
         val model = SitPathPlot.Model(listOf(here), emptyList(), 0.0, 0.0, "held")
-        val held = SitPathPlot.Viewport(36.0, -115.0, 400f, 400f)
+        val held = SitPathPlot.Viewport(36.0, -115.0, 400f, 400f, 90.0)
         val lay = SitPathPlot.layout(
             model,
             400f,
@@ -1046,9 +1168,64 @@ class SitPathPlotTest {
             courseDeg = 90.0,
         )!!
         val you = lay.project(36.0, -115.0)
-        val north = lay.project(36.001, -115.0)
-        assertTrue(north.y < you.y)
-        assertTrue(kotlin.math.abs(north.x - you.x) < 3f)
+        val cx = (lay.plotLeft + lay.plotRight) / 2f
+        val cy = (lay.plotTop + lay.plotBottom) / 2f
+        assertEquals(cx, you.x, 2f)
+        assertEquals(cy, you.y, 2f)
+        val cosLat = kotlin.math.cos(Math.toRadians(36.0))
+        val east = lay.project(36.0, -115.0 + 40.0 / (111_320.0 * cosLat))
+        assertTrue(east.y < you.y - 10f)
+    }
+
+    @Test
+    fun aHeldTurnedPinchKeepsTheFocus() {
+        val here = GpsSample(1L, 36.0, -115.0)
+        val model = SitPathPlot.Model(listOf(here), emptyList(), 0.0, 0.0, "pinch")
+        val follow = SitPathPlot.layout(
+            model,
+            400f,
+            300f,
+            followHalfM = MapFrame.CLOSE_HALF_M,
+            courseDeg = 90.0,
+        )!!
+        val held = SitPathPlot.viewportOf(follow, 90.0)
+        assertEquals(90.0, held.heldCourseDeg, 0.0)
+        val again = SitPathPlot.layout(
+            model,
+            400f,
+            300f,
+            viewport = held,
+            courseDeg = held.heldCourseDeg,
+        )!!
+        val cosLat = kotlin.math.cos(Math.toRadians(36.0))
+        val lon = here.lon + 40.0 / (111_320.0 * cosLat)
+        val before = follow.project(here.lat, lon)
+        val after = again.project(here.lat, lon)
+        assertEquals(before.x, after.x, 2f)
+        assertEquals(before.y, after.y, 2f)
+        val zoomed = held.zoomAbout(2f, here.lat, lon)
+        assertEquals(90.0, zoomed.heldCourseDeg, 0.0)
+        val zoomLay = SitPathPlot.layout(
+            model,
+            400f,
+            300f,
+            viewport = zoomed,
+            courseDeg = 90.0,
+        )!!
+        val focus = zoomLay.project(here.lat, lon)
+        assertEquals(after.x, focus.x, 3f)
+        assertEquals(after.y, focus.y, 3f)
+    }
+
+    @Test
+    fun aHeldTravelCourseDoesNotFollowANewerFix() {
+        assertEquals(90.0, MapFrame.drawnCourse(MapFrame.TRAVEL, 90.0, 10.0), 0.0)
+        assertEquals(90.0, MapFrame.drawnCourse(MapFrame.CLOSE, 90.0, 10.0), 0.0)
+        assertEquals(10.0, MapFrame.drawnCourse(MapFrame.TRAVEL, null, 10.0), 0.0)
+        assertEquals(10.0, MapFrame.drawnCourse(MapFrame.CLOSE, Double.NaN, 10.0), 0.0)
+        assertTrue(MapFrame.drawnCourse(MapFrame.NORTH, 90.0, 10.0).isNaN())
+        assertTrue(MapFrame.drawnCourse(MapFrame.CLOSE_NORTH, 90.0, 10.0).isNaN())
+        assertTrue(MapFrame.drawnCourse(MapFrame.TRAVEL, null, Double.NaN).isNaN())
     }
 
     @Test
@@ -1142,4 +1319,82 @@ class SitPathPlotTest {
         payloadLat = payloadLat,
         payloadLon = payloadLon,
     )
+
+    @Test
+    fun aFarPointClipsToTheMapEdge() {
+        val runs = SitPathPlot.clipPolyline(
+            listOf(SitPathPlot.Pt(50f, 50f), SitPathPlot.Pt(1_000_000f, 50f)),
+            left = 0f,
+            top = 0f,
+            right = 100f,
+            bottom = 100f,
+        )
+        assertEquals(1, runs.size)
+        assertEquals(50f, runs[0][0].x, 0.01f)
+        assertEquals(100f, runs[0][1].x, 0.01f)
+        assertEquals(50f, runs[0][1].y, 0.01f)
+    }
+
+    @Test
+    fun aSegmentOffTheMapIsDropped() {
+        val runs = SitPathPlot.clipPolyline(
+            listOf(SitPathPlot.Pt(-50f, -50f), SitPathPlot.Pt(-10f, -10f)),
+            0f, 0f, 100f, 100f,
+        )
+        assertTrue(runs.isEmpty())
+    }
+
+    @Test
+    fun aPathThatLeavesAndReturnsIsTwoPieces() {
+        val runs = SitPathPlot.clipPolyline(
+            listOf(
+                SitPathPlot.Pt(50f, 50f),
+                SitPathPlot.Pt(150f, 50f),
+                SitPathPlot.Pt(150f, -20f),
+                SitPathPlot.Pt(50f, -20f),
+                SitPathPlot.Pt(50f, 40f),
+            ),
+            0f, 0f, 100f, 100f,
+        )
+        assertEquals(2, runs.size)
+        for (run in runs) {
+            for (pt in run) {
+                assertTrue(pt.x in 0f..100f)
+                assertTrue(pt.y in 0f..100f)
+            }
+        }
+    }
+
+    @Test
+    fun aZoomedLivePathIsCutToThePicture() {
+        val model = SitPathPlot.Model(
+            samples = listOf(
+                GpsSample(1L, 28.0, -81.0),
+                GpsSample(2L, 28.5, -81.0),
+            ),
+            dots = emptyList(),
+            lengthM = 50_000.0,
+            spanM = 50_000.0,
+            title = "far",
+            live = true,
+        )
+        val layout = SitPathPlot.layout(
+            model,
+            400f,
+            800f,
+            viewport = SitPathPlot.Viewport(28.0, -81.0, 200f, 200f),
+        )!!
+        assertTrue(layout.path.any { !layout.onPicture(it.x, it.y) })
+        val runs = SitPathPlot.clipPolyline(
+            layout.path,
+            layout.pictureLeft,
+            layout.pictureTop,
+            layout.pictureRight,
+            layout.pictureBottom,
+        )
+        assertTrue(runs.isNotEmpty())
+        for (run in runs) {
+            for (pt in run) assertTrue(layout.onPicture(pt.x, pt.y))
+        }
+    }
 }

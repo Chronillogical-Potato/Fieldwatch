@@ -109,8 +109,15 @@ object HuntHeat {
     const val OPEN_HALF_M = 12f
     /** Closest pinch. The live-path map stays wider than this. */
     const val PINCH_HALF_M = 6f
-    const val QUIET_DBM = -95
-    const val POWER_DBM = -45
+    /** Barely there. This end of the ramp stays blue. */
+    const val QUIET_DBM = -100
+    /** Red by here, before the phone is standing on the radio. */
+    const val POWER_DBM = -50
+    /**
+     * How far past the nearest bit of the walk a dab may still tint the shade.
+     * Farther than this, the cloud fades but the color stays the path's.
+     */
+    const val SHADE_M = 1.8
 
     private val stops = floatArrayOf(0f, 0.2f, 0.4f, 0.6f, 0.8f, 1f)
     private val colors = intArrayOf(
@@ -145,11 +152,42 @@ object HuntHeat {
         return start + (end - start) * u
     }
 
-    /** Unmeasured RSSI, including Bluetooth 127, stays off the cloud. */
+    /**
+     * How much a dab this far from the nearest path still tints the shade.
+     * 0 on the path, 0 at [SHADE_M]. The wide cloud uses [ribbonWeight] for fade.
+     */
+    fun shadeWeight(extraM: Double): Float {
+        if (extraM < 0.0 || extraM >= SHADE_M) return 0f
+        val t = (1.0 - extraM / SHADE_M).toFloat()
+        return t * t
+    }
+
+    /**
+     * Pull of one dab on a cell. A louder reading leads, and a neighbor
+     * still mixes in the shade between the two.
+     */
+    fun mixWeight(shade: Float, heard: Float): Float {
+        if (shade <= 0f || heard < 0f) return 0f
+        return shade * (0.25f + 0.75f * heard.coerceIn(0f, 1f))
+    }
+
+    /**
+     * Smooth ramp. −90 stays blue, the middle shades step with the signal,
+     * and −50 and louder is red.
+     */
     fun level(rssi: Int): Float? {
         if (!Rssi.measured(rssi)) return null
-        val span = (POWER_DBM - QUIET_DBM).toFloat()
-        return ((rssi - QUIET_DBM) / span).coerceIn(0f, 1f)
+        val t = ((rssi - QUIET_DBM).toFloat() / (POWER_DBM - QUIET_DBM)).coerceIn(0f, 1f)
+        return t * kotlin.math.sqrt(t)
+    }
+
+    /**
+     * A reading can color the spot where the phone is.
+     * After the radio has been quiet, the walk continues with no new color.
+     */
+    fun paintable(rssi: Int, heardAt: Long, now: Long): Boolean {
+        if (level(rssi) == null) return false
+        return now - heardAt <= Hunt.QUIET_MS
     }
 
     /** Opaque ARGB on the ramp. The cloud applies its own fade. */
@@ -164,8 +202,9 @@ object HuntHeat {
     }
 
     /**
-     * Keep the louder hear while this phone is still in the same spot.
-     * A step of about 1.5 m starts a new hear. The oldest hear drops at [CAP].
+     * Paint this place. A louder reading while you are still here raises it.
+     * A weaker one does not pull it down. The next spot starts about 1.5 m
+     * away and keeps whatever strength is heard there. The oldest hear drops at [CAP].
      */
     fun note(
         trail: List<GpsSample>,
@@ -176,14 +215,23 @@ object HuntHeat {
     ): List<GpsSample> {
         if (level(rssi) == null) return trail
         if (!PayloadLocation.validCoord(lat, lon)) return trail
-        val hear = GpsSample(at, lat, lon, rssi)
         val last = trail.lastOrNull()
         if (last != null && Geo.meters(last.lat, last.lon, lat, lon) < STEP_M) {
-            if (rssi <= last.rssi) return trail
-            return trail.dropLast(1) + hear
+            if (rssi < last.rssi + Hunt.STEP_DB) return trail
+            return trail.dropLast(1) + last.copy(at = at, rssi = rssi)
         }
-        val next = if (trail.size < CAP) trail + hear else trail.drop(1) + hear
-        return next
+        val hear = GpsSample(at, lat, lon, rssi)
+        return if (trail.size < CAP) trail + hear else trail.drop(1) + hear
+    }
+
+    /** Cloud already on the map, then this session. The oldest hear drops at [CAP]. */
+    fun shown(base: List<GpsSample>, session: List<GpsSample>): List<GpsSample> {
+        val combined = when {
+            base.isEmpty() -> session
+            session.isEmpty() -> base
+            else -> base + session
+        }
+        return if (combined.size <= CAP) combined else combined.takeLast(CAP)
     }
 
     /** Loudest measured hear. A tie keeps the later one. */

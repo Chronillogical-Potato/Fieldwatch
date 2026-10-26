@@ -177,6 +177,39 @@ class GeoTrackTest {
     }
 
     @Test
+    fun jitterOnBothSidesOfAStopStaysOneGreenStretch() {
+        val lat0 = 28.7800
+        val lon0 = -81.3700
+        val path = ArrayList<GpsSample>()
+        var at = 1_000L
+        path += GpsSample(at, lat0, lon0)
+        repeat(8) { i ->
+            at += 8_000L
+            val eastM = if (i % 2 == 0) 30.0 else -30.0
+            val point = offset(lat0, lon0, 0.0, eastM)
+            path += GpsSample(at, point.first, point.second)
+        }
+        val stops = Geo.realStops(path)
+        assertEquals(1, stops.size)
+        assertTrue(stops.single().durationMs >= Geo.STOP_MS)
+        for (i in 1 until path.size) {
+            assertTrue(
+                "segment $i left the stop",
+                Geo.stopCovers(stops, path[i - 1].at, path[i].at),
+            )
+        }
+        at += 8_000L
+        val left = offset(lat0, lon0, 50.0, 0.0)
+        path += GpsSample(at, left.first, left.second)
+        val after = Geo.realStops(path)
+        assertEquals(1, after.size)
+        assertFalse(Geo.stopCovers(after, path[path.lastIndex - 1].at, path.last().at))
+        for (i in 1 until path.lastIndex) {
+            assertTrue(Geo.stopCovers(after, path[i - 1].at, path[i].at))
+        }
+    }
+
+    @Test
     fun aTurnLeavesTheStraightWhereItWasDriven() {
         val path = mutableListOf<GpsSample>()
         val apex = Geo.DriveApex()

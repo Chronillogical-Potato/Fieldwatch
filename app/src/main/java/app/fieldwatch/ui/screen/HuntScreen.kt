@@ -2,6 +2,10 @@ package app.fieldwatch.ui.screen
 
 import app.fieldwatch.domain.LanguageText
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,8 +41,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import app.fieldwatch.domain.DeviceExplain
@@ -47,6 +53,7 @@ import app.fieldwatch.domain.GpsSample
 import app.fieldwatch.domain.MacUtil
 import app.fieldwatch.domain.Hunt
 import app.fieldwatch.domain.MapFrame
+import app.fieldwatch.domain.MapLookAhead
 import app.fieldwatch.domain.PayloadLocation
 import app.fieldwatch.domain.Palette
 import app.fieldwatch.domain.Rssi
@@ -68,12 +75,29 @@ fun HuntScreen(
     huntVibrate: Boolean = false,
 ) {
     val hunt by vm.hunt.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val stepPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) vm.useHardwareSteps()
+    }
+    LaunchedEffect(Unit) {
+        val allowed = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACTIVITY_RECOGNITION,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!allowed && vm.huntNeedsStepPermission()) {
+            stepPermission.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        }
+    }
     DisposableEffect(Unit) {
         onDispose { vm.stopHunt() }
     }
     val ui by vm.ui.collectAsStateWithLifecycle()
     var viewport by remember { mutableStateOf<SitPathPlot.Viewport?>(null) }
     val tiles by vm.huntTiles.collectAsStateWithLifecycle()
+    val zoomIn by vm.huntZoomIn.collectAsStateWithLifecycle()
+    val flockRevision by vm.flockRevision.collectAsStateWithLifecycle()
     LaunchedEffect(hunt.active, huntBeep, huntVibrate) {
         if (!hunt.active || (!huntBeep && !huntVibrate)) return@LaunchedEffect
         var lastTick = 0L
@@ -102,14 +126,49 @@ fun HuntScreen(
     }
     val online = ui.settings.onlineLookup
     val basemap = ui.settings.mapBasemap
+    val overlays = ui.settings.mapOverlays
     val mapKeyRev by vm.mapKeyRevision.collectAsStateWithLifecycle()
-    LaunchedEffect(cover, online, basemap, viewport, mapKeyRev) {
+    var tileWindow by remember { mutableStateOf<DoubleArray?>(null) }
+    val tileWindowKey = tileWindow?.let { SitPathPlot.tileWindowKey(it) }.orEmpty()
+    val course = ui.travelDeg
+    val courseKey = if (course.isFinite()) (course / MapLookAhead.TURN_DEG).toInt() else Int.MIN_VALUE
+    val heldMap = viewport != null
+    LaunchedEffect(hunt.onGlobe) {
+        if (!hunt.onGlobe) {
+            tileWindow = null
+            vm.refreshHuntTiles(emptyList(), online, basemap, overlays)
+        }
+    }
+    LaunchedEffect(cover, online, basemap, overlays, heldMap, mapKeyRev, tileWindowKey, hunt.onGlobe) {
+        if (!hunt.onGlobe) {
+            vm.stopHuntPrefetch()
+            return@LaunchedEffect
+        }
         val held = viewport
-        if (held == null) {
-            vm.refreshHuntTiles(cover, online, basemap)
+        val window = tileWindow
+        when {
+            window != null -> {
+                vm.refreshHuntArea(
+                    window[0], window[1], window[2], window[3],
+                    online, basemap, overlays,
+                    held = held != null,
+                )
+            }
+            held != null -> {
+                vm.refreshHuntViewport(held, online, basemap, overlays, held = true)
+            }
+            else -> vm.refreshHuntTiles(cover, online, basemap, overlays)
+        }
+    }
+    LaunchedEffect(online, basemap, overlays, heldMap, mapKeyRev, tileWindowKey, hunt.onGlobe, courseKey) {
+        if (heldMap) return@LaunchedEffect
+        val window = tileWindow
+        if (hunt.onGlobe && window != null && course.isFinite()) {
+            vm.prefetchHunt(
+                window[0], window[1], window[2], window[3], course, online, basemap, overlays,
+            )
         } else {
-            delay(350)
-            vm.refreshHuntViewport(held, online, basemap)
+            vm.stopHuntPrefetch()
         }
     }
     val device = hunt.device
@@ -122,18 +181,21 @@ fun HuntScreen(
         .nightIf(night)
     val hasHere = PayloadLocation.validCoord(hunt.hereLat, hunt.hereLon)
     val showMap = hunt.trail.isNotEmpty() || hasHere
-    val footer = Geo.mapFooterText(
-        ui.settings.mapFooter,
-        if (hasHere) hunt.hereLat else ui.phoneLat,
-        if (hasHere) hunt.hereLon else ui.phoneLon,
-        demoMode,
-    )
+    val footer = if (hunt.onGlobe) {
+        Geo.mapFooterText(ui.settings.mapFooter, hunt.hereLat, hunt.hereLon, demoMode)
+    } else {
+        null
+    }
     val hint = when {
+        showMap && !hunt.onGlobe -> LanguageText.text("hunt.no.gps.walk")
         showMap && hunt.trail.isEmpty() -> LanguageText.text("hunt.heat.empty")
         !showMap && !ui.settings.tagLocation -> LanguageText.text("ui.turn.tag.detections.gps.2")
-        !showMap -> LanguageText.text("ui.waiting.gps.fix")
+        !showMap -> LanguageText.text("hunt.no.gps.walk")
+        zoomIn -> LanguageText.text("map.zoom.in")
         else -> null
     }
+    val mapTiles = if (hunt.onGlobe) tiles else emptyList()
+    val showFlock = hunt.onGlobe && (ui.settings.flockLayer || ui.settings.sensorLayer)
     val loudest = if (hunt.peakRssi > -127 && Rssi.measured(hunt.peakRssi)) {
         LanguageText.text("ui.loudest.hunt") + " ${hunt.peakRssi} dBm"
     } else {
@@ -250,7 +312,9 @@ fun HuntScreen(
                         trail = hunt.trail,
                         hereLat = hunt.hereLat,
                         hereLon = hunt.hereLon,
-                        tiles = tiles,
+                        uncertaintyM = hunt.uncertaintyM,
+                        holdFlat = hunt.holdFlat,
+                        tiles = mapTiles,
                         position = footer,
                         hint = hint,
                         viewport = viewport,
@@ -259,6 +323,13 @@ fun HuntScreen(
                         mapFrame = MapFrame.resolved(ui.settings.mapFrame, ui.settings.mapRotate),
                         onRotate = { vm.cycleMapFrame() },
                         onToggleClose = { vm.toggleMapClose() },
+                        flock = showFlock,
+                        flockIndex = vm.flockIndex,
+                        flockRevision = flockRevision,
+                        onTileWindow = { next ->
+                            if (!hunt.onGlobe) return@HuntHeatMap
+                            if (SitPathPlot.tileWindowKey(next) != tileWindowKey) tileWindow = next
+                        },
                     )
                 } else {
                     Text(

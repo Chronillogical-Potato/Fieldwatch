@@ -149,6 +149,42 @@ class Alerter(private val context: Context) {
         manager.cancel(GNSS_NOTE_ID)
     }
 
+    /**
+     * A known mapped sensor ahead. Speaks [text], posts it on the layer channel, and pulses once.
+     * [text] has no coordinates. This does not use the watchlist beep.
+     */
+    fun flockNote(text: String) {
+        if (text.isBlank()) return
+        prepareVoice()
+        main.post {
+            ensureFlockChannel()
+            val pending = PendingIntent.getActivity(
+                context,
+                FLOCK_NOTE_ID,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val note = NotificationCompat.Builder(context, FLOCK_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_layer)
+                .setContentTitle(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setSilent(true)
+                .setContentIntent(pending)
+                .build()
+            manager.notify(FLOCK_NOTE_ID, note)
+            flockPulse()
+            speakOver(text)
+        }
+    }
+
+    fun clearFlockNote() {
+        main.post { manager.cancel(FLOCK_NOTE_ID) }
+    }
+
     /** Short Hunt geiger tick. Not the watchlist double-pip. */
     fun huntTick(beepOn: Boolean, vibrateOn: Boolean) {
         if (vibrateOn) main.post { huntPulse() }
@@ -427,6 +463,20 @@ class Alerter(private val context: Context) {
         }
     }
 
+    /** Speak now, interrupting a phrase already in progress. The engine keeps the line if it is still starting. */
+    private fun speakOver(text: String) {
+        val phrase = text.trim()
+        if (phrase.isEmpty()) return
+        pendingSpeak = phrase
+        ensureTts()
+        if (!ttsReady) return
+        if (speaking) {
+            speaking = false
+            utteranceStarted = false
+        }
+        startSpeak(phrase)
+    }
+
     private fun speakClassName(text: String) {
         val phrase = text.trim()
         if (phrase.isEmpty()) return
@@ -557,10 +607,40 @@ class Alerter(private val context: Context) {
         )
     }
 
+    private fun ensureFlockChannel() {
+        if (Build.VERSION.SDK_INT < 26) return
+        if (manager.getNotificationChannel(FLOCK_CHANNEL) != null) return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                FLOCK_CHANNEL,
+                LanguageText.text("settings.layer.channel"),
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = LanguageText.text("settings.layer.channel.body")
+                setSound(null, null)
+                enableVibration(false)
+            },
+        )
+    }
+
+    private fun flockPulse() {
+        val vibrator = if (Build.VERSION.SDK_INT >= 31) {
+            val vm = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
+            vm.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        }
+        if (!vibrator.hasVibrator()) return
+        vibrator.vibrate(VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE))
+    }
+
     companion object {
         const val CHANNEL = "fieldwatch_watch_v3"
         const val GNSS_CHANNEL = "fieldwatch_gnss"
+        const val FLOCK_CHANNEL = "fieldwatch_map_layers"
         private const val GNSS_NOTE_ID = 71_001
+        private const val FLOCK_NOTE_ID = 72_010
         const val EXTRA_DEVICE_KEY = "device_key"
         private const val FREQ_HZ = 1050.0
         private const val PIP_MS = 85

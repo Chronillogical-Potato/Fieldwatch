@@ -108,7 +108,7 @@ object SettingsExchange {
                 darkTheme = true,
                 scanControlsExpanded = false,
                 takCallsign = TakInstall.storedCallsign(pack.settings.takCallsign),
-            ),
+            ).withOverlayBasemaps(),
             filter = pack.filter,
             presets = pack.presets,
             watchlist = pack.watchlist,

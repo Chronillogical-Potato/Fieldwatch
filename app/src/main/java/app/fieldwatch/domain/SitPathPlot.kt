@@ -17,6 +17,9 @@ object SitPathPlot {
      * still shows the surrounding streets. A longer walk is unchanged.
      */
     const val MIN_HALF_SPAN_M = 180f
+
+    /** Room around that floor. A sit that has not moved uses both. */
+    const val FIT_PAD = 1.22f
     data class Dot(
         val key: String,
         val lat: Double,
@@ -69,6 +72,10 @@ object SitPathPlot {
         val caption: String = "",
         /** GNSS detections placed on this phone's line. Not drawn on an aircraft card. */
         val gnss: List<GnssPin> = emptyList(),
+        /** Cameras the sit path came near. Empty on an aircraft card and on Show live path. */
+        val pathCameras: List<FlockCamera> = emptyList(),
+        /** Same camera count as the sit report. Null on an aircraft card and on Show live path. */
+        val pathCameraTally: PathCameras.Tally? = null,
     )
 
     data class Pt(val x: Float, val y: Float)
@@ -86,9 +93,59 @@ object SitPathPlot {
         val samples: List<GpsSample> = emptyList(),
         /** Meters per screen pixel. 1 when a caller built a layout without a fit. */
         val metersPerPx: Float = 1f,
+        /**
+         * On-screen geographic window. The drive line is clipped to this.
+         * It can be inset from [plotLeft] when the window is not the shape of the map.
+         */
+        val pictureLeft: Float = 0f,
+        val pictureTop: Float = 0f,
+        val pictureRight: Float = 0f,
+        val pictureBottom: Float = 0f,
         /** Inverse of [project]. Latitude, then longitude. */
         val unproject: (Float, Float) -> Pair<Double, Double> = { _, _ -> 0.0 to 0.0 },
-    )
+    ) {
+        /**
+         * South, north, west, east of the four screen corners, grown a little.
+         * A turned map puts those corners outside the path's north-up box.
+         */
+        fun tileWindow(): DoubleArray? {
+            val corners = arrayOf(
+                unproject(plotLeft, plotTop),
+                unproject(plotRight, plotTop),
+                unproject(plotLeft, plotBottom),
+                unproject(plotRight, plotBottom),
+            )
+            var south = Double.POSITIVE_INFINITY
+            var north = Double.NEGATIVE_INFINITY
+            var west = Double.POSITIVE_INFINITY
+            var east = Double.NEGATIVE_INFINITY
+            for ((lat, lon) in corners) {
+                if (!lat.isFinite() || !lon.isFinite()) return null
+                if (lat < south) south = lat
+                if (lat > north) north = lat
+                if (lon < west) west = lon
+                if (lon > east) east = lon
+            }
+            if (north <= south || east <= west) return null
+            val midLat = (south + north) / 2.0
+            val midLon = (west + east) / 2.0
+            val halfLat = (north - south) / 2.0 * TILE_WINDOW_PAD
+            val halfLon = (east - west) / 2.0 * TILE_WINDOW_PAD
+            return doubleArrayOf(midLat - halfLat, midLat + halfLat, midLon - halfLon, midLon + halfLon)
+        }
+
+        /** True when this pixel sits on the geographic window. */
+        fun onPicture(x: Float, y: Float): Boolean =
+            x.isFinite() && y.isFinite() &&
+                x in pictureLeft..pictureRight && y in pictureTop..pictureBottom
+
+        /** A mark this close can still be drawn. A point far off the map is not. */
+        fun nearPicture(x: Float, y: Float, margin: Float = 24f): Boolean {
+            if (!x.isFinite() || !y.isFinite()) return false
+            return x in (pictureLeft - margin)..(pictureRight + margin) &&
+                y in (pictureTop - margin)..(pictureBottom + margin)
+        }
+    }
 
     /**
      * Held live view. East and north stay separate so the first pinch on a tall
@@ -99,6 +156,8 @@ object SitPathPlot {
         val centerLon: Double,
         val halfEastM: Float,
         val halfNorthM: Float,
+        /** Course when the finger took the map. NaN if that picture was north-up. */
+        val heldCourseDeg: Double = Double.NaN,
     ) {
         fun clamped(minHalfM: Float = MIN_HALF_M): Viewport {
             val floor = if (minHalfM > 0f) minHalfM else MIN_HALF_M
@@ -149,12 +208,27 @@ object SitPathPlot {
             )
         }
 
-        /** Finger right passes a negative [eastM]. Finger down passes a positive [northM]. */
+        /** Moves the center east and north, in meters. */
         fun panMeters(eastM: Float, northM: Float): Viewport {
             val cos0 = cos(Math.toRadians(centerLat)).coerceAtLeast(0.2)
             val dLon = eastM / (111_320.0 * cos0)
             val dLat = northM / 110_540.0
             return copy(centerLat = centerLat + dLat, centerLon = centerLon + dLon)
+        }
+
+        /**
+         * Screen drag, in pixels, y down. [courseDeg] is the course the picture
+         * was drawn with. NaN keeps the drag on east and north.
+         */
+        fun panScreen(panX: Float, panY: Float, metersPerPx: Float, courseDeg: Double): Viewport {
+            val screenRight = -panX * metersPerPx
+            val screenUp = panY * metersPerPx
+            val turn = if (courseDeg.isFinite()) Math.toRadians(courseDeg) else 0.0
+            val cosT = cos(turn)
+            val sinT = sin(turn)
+            val east = screenRight * cosT + screenUp * sinT
+            val north = -screenRight * sinT + screenUp * cosT
+            return panMeters(east.toFloat(), north.toFloat())
         }
 
         companion object {
@@ -163,14 +237,20 @@ object SitPathPlot {
         }
     }
 
+    /** Stable key for a [Layout.tileWindow]. About one meter. */
+    fun tileWindowKey(bounds: DoubleArray): String =
+        bounds.joinToString(":") { Math.round(it * 100_000.0).toString() }
+
+    private const val TILE_WINDOW_PAD = 1.12
+
     /** The geographic window currently drawn, so the next pinch does not jump. */
-    fun viewportOf(layout: Layout): Viewport {
+    fun viewportOf(layout: Layout, courseDeg: Double = Double.NaN): Viewport {
         val cx = (layout.plotLeft + layout.plotRight) / 2f
         val cy = (layout.plotTop + layout.plotBottom) / 2f
         val (lat, lon) = layout.unproject(cx, cy)
         val halfEast = (layout.plotRight - layout.plotLeft) / 2f * layout.metersPerPx
         val halfNorth = (layout.plotBottom - layout.plotTop) / 2f * layout.metersPerPx
-        return Viewport(lat, lon, halfEast, halfNorth).clamped()
+        return Viewport(lat, lon, halfEast, halfNorth, courseDeg).clamped()
     }
 
     data class Mark(
@@ -262,6 +342,8 @@ object SitPathPlot {
         val craftKeys: List<String> = emptyList(),
         /** GNSS detections on this phone's line. Empty on an aircraft figure. */
         val gnss: List<GnssPin> = emptyList(),
+        /** Cameras along this phone's path. Empty on an aircraft figure and on Compare. */
+        val cameras: List<FlockCamera> = emptyList(),
     ) {
         val drawable: Boolean
             get() = tracks.any { it.samples.size >= 2 || (it.aircraft && it.samples.isNotEmpty()) }
@@ -281,9 +363,15 @@ object SitPathPlot {
         val at: Pt,
     )
 
+    /**
+     * Marks that share a screen spot. [chain] follows neighbors, so a line of
+     * marks stays one number. Reports → Path leaves that off: a zoomed view
+     * then draws each spot, and only marks on the same spot stay a number.
+     */
     fun clusters(
         dots: List<Pair<Dot, Pt>>,
         threshPx: Float = 28f,
+        chain: Boolean = true,
         numberOf: (Dot) -> Int = { dot ->
             val i = dots.indexOfFirst { it.first.key == dot.key }
             if (i < 0) 1 else i + 1
@@ -291,22 +379,38 @@ object SitPathPlot {
     ): List<Cluster> {
         val used = BooleanArray(dots.size)
         val out = ArrayList<Cluster>()
+        val thresh2 = threshPx * threshPx
         for (i in dots.indices) {
             if (used[i]) continue
             val idx = ArrayList<Int>()
-            val q = ArrayDeque<Int>()
-            q.add(i)
-            used[i] = true
-            while (q.isNotEmpty()) {
-                val j = q.removeFirst()
-                idx += j
-                for (k in dots.indices) {
+            if (chain) {
+                val q = ArrayDeque<Int>()
+                q.add(i)
+                used[i] = true
+                while (q.isNotEmpty()) {
+                    val j = q.removeFirst()
+                    idx += j
+                    for (k in dots.indices) {
+                        if (used[k]) continue
+                        val dx = dots[j].second.x - dots[k].second.x
+                        val dy = dots[j].second.y - dots[k].second.y
+                        if (dx * dx + dy * dy <= thresh2) {
+                            used[k] = true
+                            q.add(k)
+                        }
+                    }
+                }
+            } else {
+                val anchor = dots[i].second
+                used[i] = true
+                idx += i
+                for (k in i + 1 until dots.size) {
                     if (used[k]) continue
-                    val dx = dots[j].second.x - dots[k].second.x
-                    val dy = dots[j].second.y - dots[k].second.y
-                    if (dx * dx + dy * dy <= threshPx * threshPx) {
+                    val dx = anchor.x - dots[k].second.x
+                    val dy = anchor.y - dots[k].second.y
+                    if (dx * dx + dy * dy <= thresh2) {
                         used[k] = true
-                        q.add(k)
+                        idx += k
                     }
                 }
             }
@@ -381,10 +485,10 @@ object SitPathPlot {
         minHalfM: Float = Viewport.MIN_HALF_M,
         /**
          * Close follow. Half the short side, in meters, centered on the last point.
-         * 0 fits the whole picture. A held view ignores this and stays north-up.
+         * 0 fits the whole picture. A held view ignores this.
          */
         followHalfM: Float = 0f,
-        /** Degrees clockwise from north. A held view stays north-up. NaN stays north-up. */
+        /** Degrees clockwise from north. NaN stays north-up. */
         courseDeg: Double = Double.NaN,
     ): Layout? {
         if (width <= pad * 2 || height <= pad * 2 + scaleBarReserve) return null
@@ -415,7 +519,7 @@ object SitPathPlot {
             lon0 = model.dots.map { it.lon }.average()
         }
         val cos0 = cos(Math.toRadians(lat0)).coerceAtLeast(0.2)
-        val turn = if (held == null && courseDeg.isFinite()) Math.toRadians(courseDeg) else 0.0
+        val turn = if (courseDeg.isFinite()) Math.toRadians(courseDeg) else 0.0
         val cosT = cos(turn)
         val sinT = sin(turn)
         fun mx(lat: Double, lon: Double): Float {
@@ -462,8 +566,8 @@ object SitPathPlot {
             val midX = (loX + hiX) / 2f
             val midY = (loY + hiY) / 2f
             val floor = if (model.minHalfSpanM > 0f) model.minHalfSpanM else MIN_HALF_SPAN_M
-            val hx = ((hiX - loX) / 2f).coerceAtLeast(floor) * 1.22f
-            val hy = ((hiY - loY) / 2f).coerceAtLeast(floor) * 1.22f
+            val hx = ((hiX - loX) / 2f).coerceAtLeast(floor) * FIT_PAD
+            val hy = ((hiY - loY) / 2f).coerceAtLeast(floor) * FIT_PAD
             minX = midX - hx
             maxX = midX + hx
             minY = midY - hy
@@ -496,6 +600,10 @@ object SitPathPlot {
             plotBottom = height - pad - scaleBarReserve,
             samples = phone,
             metersPerPx = 1f / scale,
+            pictureLeft = ox,
+            pictureTop = oy,
+            pictureRight = ox + usedW,
+            pictureBottom = oy + usedH,
             unproject = { x, y ->
                 val screenEast = minX + (x - ox) / scale
                 val screenNorth = maxY - (y - oy) / scale
@@ -507,6 +615,106 @@ object SitPathPlot {
             },
         )
     }
+
+    /**
+     * Pieces of [points] that sit on the map. A point far past the edge is cut
+     * at the edge, so the stroke cannot jump the clip.
+     */
+    fun clipPolyline(
+        points: List<Pt>,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ): List<List<Pt>> {
+        if (points.size < 2 || !(right > left && bottom > top)) return emptyList()
+        val runs = ArrayList<ArrayList<Pt>>()
+        for (i in 1 until points.size) {
+            val clipped = clipSegment(points[i - 1], points[i], left, top, right, bottom) ?: continue
+            val open = runs.lastOrNull()
+            val start = clipped.first
+            if (open != null && nearPt(open.last(), start)) open.add(clipped.second)
+            else runs.add(arrayListOf(start, clipped.second))
+        }
+        return runs
+    }
+
+    /** The part of the segment inside the rectangle, or null when it misses. */
+    fun clipSegment(
+        a: Pt,
+        b: Pt,
+        left: Float,
+        top: Float,
+        right: Float,
+        bottom: Float,
+    ): Pair<Pt, Pt>? {
+        if (!a.x.isFinite() || !a.y.isFinite() || !b.x.isFinite() || !b.y.isFinite()) return null
+        if (!(right > left && bottom > top)) return null
+        var ax = a.x
+        var ay = a.y
+        var bx = b.x
+        var by = b.y
+        var codeA = outCode(ax, ay, left, top, right, bottom)
+        var codeB = outCode(bx, by, left, top, right, bottom)
+        var guard = 0
+        while (guard++ < 8) {
+            if (codeA or codeB == 0) return Pt(ax, ay) to Pt(bx, by)
+            if (codeA and codeB != 0) return null
+            val code = if (codeA != 0) codeA else codeB
+            val x: Float
+            val y: Float
+            when {
+                code and CLIP_TOP != 0 -> {
+                    if (by == ay) return null
+                    x = ax + (bx - ax) * (top - ay) / (by - ay)
+                    y = top
+                }
+                code and CLIP_BOTTOM != 0 -> {
+                    if (by == ay) return null
+                    x = ax + (bx - ax) * (bottom - ay) / (by - ay)
+                    y = bottom
+                }
+                code and CLIP_RIGHT != 0 -> {
+                    if (bx == ax) return null
+                    y = ay + (by - ay) * (right - ax) / (bx - ax)
+                    x = right
+                }
+                else -> {
+                    if (bx == ax) return null
+                    y = ay + (by - ay) * (left - ax) / (bx - ax)
+                    x = left
+                }
+            }
+            if (!x.isFinite() || !y.isFinite()) return null
+            if (code == codeA) {
+                ax = x
+                ay = y
+                codeA = outCode(ax, ay, left, top, right, bottom)
+            } else {
+                bx = x
+                by = y
+                codeB = outCode(bx, by, left, top, right, bottom)
+            }
+        }
+        return Pt(ax.coerceIn(left, right), ay.coerceIn(top, bottom)) to
+            Pt(bx.coerceIn(left, right), by.coerceIn(top, bottom))
+    }
+
+    private fun nearPt(a: Pt, b: Pt) = abs(a.x - b.x) <= 0.05f && abs(a.y - b.y) <= 0.05f
+
+    private fun outCode(x: Float, y: Float, left: Float, top: Float, right: Float, bottom: Float): Int {
+        var code = 0
+        if (x < left) code = code or CLIP_LEFT
+        else if (x > right) code = code or CLIP_RIGHT
+        if (y < top) code = code or CLIP_TOP
+        else if (y > bottom) code = code or CLIP_BOTTOM
+        return code
+    }
+
+    private const val CLIP_LEFT = 1
+    private const val CLIP_RIGHT = 2
+    private const val CLIP_BOTTOM = 4
+    private const val CLIP_TOP = 8
 
     fun niceMeters(raw: Double): Double {
         val v = raw.coerceAtLeast(5.0)

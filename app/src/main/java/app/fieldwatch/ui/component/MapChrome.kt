@@ -6,18 +6,29 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -31,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import app.fieldwatch.data.PathTiles
 import app.fieldwatch.domain.LanguageText
 import app.fieldwatch.domain.MapFrame
 import app.fieldwatch.domain.SitPathPlot
@@ -40,6 +52,49 @@ import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+/**
+ * Map credit in the bottom-right corner.
+ * One line stays as wide as its words. Extra lines stay on the right half so the grid on the left stays clear.
+ */
+@Composable
+internal fun MapCreditChip(
+    lines: List<String>,
+    link: String?,
+    onOpen: (String) -> Unit,
+    color: Color,
+    textStyle: TextStyle,
+    modifier: Modifier = Modifier,
+    maxWidth: Dp = Dp.Unspecified,
+) {
+    val surface = MaterialTheme.colorScheme.surface
+    val cap = if (lines.size > 1 && maxWidth != Dp.Unspecified) {
+        Modifier.widthIn(max = maxWidth)
+    } else {
+        Modifier
+    }
+    Column(
+        modifier
+            .then(cap)
+            .background(surface.copy(alpha = 0.84f), RoundedCornerShape(2.dp))
+            .clickable(enabled = link != null) {
+                if (link != null) onOpen(link)
+            }
+            .padding(horizontal = 4.dp, vertical = 1.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
+        for (line in lines) {
+            Text(
+                line,
+                style = textStyle,
+                color = color,
+                textAlign = TextAlign.End,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
 
 /**
  * One square, four pictures. Tap switches north-up and direction of travel.
@@ -254,6 +309,57 @@ private fun DrawScope.drawRoute(
     val ringStroke = Stroke(width = stroke, cap = StrokeCap.Round)
     drawCircle(ink, ring, Offset(left, low), style = ringStroke)
     drawCircle(ink, ring, Offset(right, top), style = ringStroke)
+}
+
+/**
+ * Map pictures for one view. The newest zoom is drawn on top of an older one.
+ * They are flattened first, then faded, so a closer picture does not show through a wider one.
+ */
+internal fun DrawScope.drawMapTiles(
+    tiles: List<PathTiles.Tile>,
+    project: (Double, Double) -> SitPathPlot.Pt,
+    alpha: Float = 0.55f,
+) {
+    if (tiles.isEmpty()) return
+    val front = tiles.last()
+    val frontSpan = front.east - front.west
+    val top = ArrayList<PathTiles.Tile>(tiles.size)
+    val back = ArrayList<PathTiles.Tile>()
+    for (tile in tiles) {
+        if (PathTiles.sameTileZoom(tile.east - tile.west, frontSpan)) top += tile
+        else back += tile
+    }
+    if (back.isEmpty() || top.isEmpty()) {
+        val only = if (top.isNotEmpty()) top else back
+        for (tile in only) drawOneTile(tile, project, alpha)
+        return
+    }
+    val fade = androidx.compose.ui.graphics.Paint().apply { this.alpha = alpha }
+    drawContext.canvas.saveLayer(Rect(0f, 0f, size.width, size.height), fade)
+    try {
+        for (tile in back) drawOneTile(tile, project, 1f)
+        for (tile in top) drawOneTile(tile, project, 1f)
+    } finally {
+        drawContext.canvas.restore()
+    }
+}
+
+private fun DrawScope.drawOneTile(
+    tile: PathTiles.Tile,
+    project: (Double, Double) -> SitPathPlot.Pt,
+    alpha: Float,
+) {
+    runCatching {
+        drawMapRaster(
+            tile.bitmap.asImageBitmap(),
+            tile.north,
+            tile.west,
+            tile.south,
+            tile.east,
+            project,
+            alpha = alpha,
+        )
+    }
 }
 
 /** A tile or heat picture. North-up stays an axis-aligned rectangle. A turned map rotates the bitmap so its top stays the north edge. */

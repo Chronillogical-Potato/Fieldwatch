@@ -1,7 +1,9 @@
 package app.fieldwatch
 
+import android.Manifest
 import android.app.Application
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
@@ -16,6 +18,8 @@ import app.fieldwatch.crash.CrashNotes
 import app.fieldwatch.radio.GnssMonitor
 import app.fieldwatch.data.AssetLanguageFiles
 import app.fieldwatch.data.ConfigStore
+import app.fieldwatch.data.FlockFiles
+import app.fieldwatch.data.SensorList
 import app.fieldwatch.data.LanguageStore
 import app.fieldwatch.domain.LanguageText
 import app.fieldwatch.data.DeviceStore
@@ -27,10 +31,22 @@ import app.fieldwatch.data.PlaceStore
 import app.fieldwatch.data.SitStore
 import app.fieldwatch.domain.CoTravel
 import app.fieldwatch.domain.FilterEngine
+import app.fieldwatch.domain.FlockApproach
+import app.fieldwatch.domain.FlockCamera
+import app.fieldwatch.domain.FlockIndex
+import app.fieldwatch.domain.FlockLatch
+import app.fieldwatch.domain.alertsFor
+import app.fieldwatch.domain.anySensorAlert
+import app.fieldwatch.domain.sensorNotice
 import app.fieldwatch.domain.Geo
 import app.fieldwatch.domain.GpsSample
+import app.fieldwatch.domain.Hunt
+import app.fieldwatch.domain.HuntHeat
+import app.fieldwatch.domain.HuntPlain
+import app.fieldwatch.domain.HuntPose
 import app.fieldwatch.domain.HuntStepDetector
 import app.fieldwatch.domain.HuntTrack
+import app.fieldwatch.domain.huntAccelStepCounts
 import app.fieldwatch.domain.FloodBurst
 import app.fieldwatch.domain.PairingFlood
 import app.fieldwatch.domain.WifiBeaconFlood
@@ -67,6 +83,11 @@ class FieldwatchApp : Application() {
         private set
     lateinit var alerter: Alerter
         private set
+    val flockIndex = FlockIndex()
+    private val flockLatch = FlockLatch()
+    private val _flockRevision = MutableStateFlow(0)
+    val flockRevision: StateFlow<Int> = _flockRevision.asStateFlow()
+    private var flockLoadGen = 0
     lateinit var tak: TakPublisher
         private set
     val pairingFlood = PairingFlood()
@@ -109,6 +130,9 @@ class FieldwatchApp : Application() {
     private var lastGpsFix: Pair<Double, Double>? = null
     @Volatile
     private var lastGpsFixAt: Long = 0L
+    /** Meters. NaN when that fix did not say how wide it was. */
+    @Volatile
+    private var lastGpsAcc = Float.NaN
     /** Course for the map button. NaN until GPS has shown a direction. */
     @Volatile
     var travelDeg: Double = Double.NaN
@@ -126,14 +150,43 @@ class FieldwatchApp : Application() {
         return fix
     }
 
-    /** Latest GPS fix a Hunt cloud can trust. Older than 30 s is left off. */
+    /** Where the hunt dot is. A local meter picture until the walk is on a fix. Not a place to publish. */
     fun huntFix(now: Long = System.currentTimeMillis()): Pair<Double, Double>? {
         synchronized(motionLock) {
-            if (huntMotion) return huntTrack.position()
+            if (huntMotion) return huntTrack.display()
         }
         val fix = lastGpsFix ?: return null
         if (!phoneFixIsCurrent(lastGpsFixAt, now)) return null
         return fix
+    }
+
+    /**
+     * Remember a measured reading so the next steps can paint it where the phone is.
+     * Does not add a spot. [at] is the time this phone still heard the radio.
+     */
+    fun armHuntRssi(rssi: Int, at: Long) {
+        synchronized(motionLock) {
+            if (!huntMotion) return
+            if (HuntHeat.level(rssi) == null) return
+            if (at < lastHuntRssiAt && HuntHeat.level(lastHuntRssi) != null) return
+            lastHuntRssi = rssi
+            lastHuntRssiAt = at
+            if (huntTrack.raiseHere(rssi, at)) publishHuntLocked()
+        }
+    }
+
+    /** One hear at the current step position. Later steps keep painting until the radio goes quiet. */
+    fun noteHunt(rssi: Int, at: Long) {
+        synchronized(motionLock) {
+            if (!huntMotion) return
+            if (HuntHeat.level(rssi) != null) {
+                val had = HuntHeat.level(lastHuntRssi) != null
+                if (!had || at >= lastHuntRssiAt) lastHuntRssiAt = at
+                lastHuntRssi = rssi
+            }
+            huntTrack.note(rssi, at)
+            publishHuntLocked()
+        }
     }
 
     private val motionLock = Any()
@@ -141,73 +194,234 @@ class FieldwatchApp : Application() {
     private val stepDetector = HuntStepDetector()
     private var huntMotion = false
     private var huntSensors = false
-    private val _huntPlace = MutableStateFlow<Pair<Double, Double>?>(null)
-    /** Fused hunt position. Null when Hunt is closed or GPS has not anchored it. */
-    val huntPlace: StateFlow<Pair<Double, Double>?> = _huntPlace.asStateFlow()
+    /** True while the step detector is registered. */
+    private var hardwareSteps = false
+    /** The step sensor stayed quiet, so the walking motion counts for the rest of this hunt. */
+    private var accelSteps = false
+    /** A step-detector event arrived during this hunt. */
+    private var hardwareHeard = false
+    private var accelStreak = 0
+    /** When the step sensor was asked to start reporting. */
+    private var stepWatchAt = 0L
+    private var magSensorPresent = false
+    private var sawMag = false
+    private var lastMagUt = Double.NaN
+    private var lastMagAcc = SensorManager.SENSOR_STATUS_UNRELIABLE
+    private var lastCompass = Double.NaN
+    private var lastGame = Double.NaN
+    private var lastHuntRssi = 127
+    private var lastHuntRssiAt = 0L
+    private val rotScratch = FloatArray(9)
+    private val oriScratch = FloatArray(3)
+    private val _huntPose = MutableStateFlow<HuntPose?>(null)
+    /** Null when Hunt is closed. The dot reads this. */
+    val huntPose: StateFlow<HuntPose?> = _huntPose.asStateFlow()
+    private val _huntCloud = MutableStateFlow<List<GpsSample>>(emptyList())
+    /**
+     * Hears for this session, in the same coordinates as the dot.
+     * The map reads this list. Hears start with the walk, before GPS places it.
+     */
+    val huntCloud: StateFlow<List<GpsSample>> = _huntCloud.asStateFlow()
+    private var publishedCloudGen = -1
 
     private val huntSensorListener = object : SensorEventListener {
         override fun onSensorChanged(event: SensorEvent) {
-            val moved = synchronized(motionLock) {
-                if (!huntMotion) return@synchronized false
+            synchronized(motionLock) {
+                if (!huntMotion) return@synchronized
+                val now = System.currentTimeMillis()
                 when (event.sensor.type) {
                     Sensor.TYPE_ROTATION_VECTOR -> {
-                        val rot = FloatArray(9)
-                        val ori = FloatArray(3)
-                        val ok = runCatching {
-                            SensorManager.getRotationMatrixFromVector(rot, event.values)
-                            SensorManager.getOrientation(rot, ori)
-                        }.isSuccess
-                        if (ok) {
-                            huntTrack.heading(
-                                Math.toDegrees(ori[0].toDouble()),
-                                System.currentTimeMillis(),
-                            )
+                        val ori = orientationOf(event.values) ?: return@synchronized
+                        lastCompass = ori[0]
+                        val wasFlat = huntTrack.holdingFlat()
+                        huntTrack.heading(ori[0], gameOrNull(), magHealthyLocked(), now)
+                        huntTrack.tilt(ori[1], now)
+                        if (huntTrack.holdingFlat() != wasFlat) publishHuntLocked()
+                    }
+                    Sensor.TYPE_GAME_ROTATION_VECTOR -> {
+                        val ori = orientationOf(event.values) ?: return@synchronized
+                        lastGame = ori[0]
+                        if (lastCompass.isFinite()) {
+                            huntTrack.heading(lastCompass, lastGame, magHealthyLocked(), now)
                         }
-                        false
+                    }
+                    Sensor.TYPE_MAGNETIC_FIELD -> {
+                        val v = event.values
+                        if (v.size < 3) return@synchronized
+                        lastMagUt = kotlin.math.sqrt(
+                            (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).toDouble(),
+                        )
+                        lastMagAcc = event.accuracy
+                        sawMag = true
+                        if (lastCompass.isFinite()) {
+                            huntTrack.heading(lastCompass, gameOrNull(), magHealthyLocked(), now)
+                        }
+                    }
+                    Sensor.TYPE_STEP_DETECTOR -> {
+                        if (accelSteps) return@synchronized
+                        hardwareHeard = true
+                        accelStreak = 0
+                        if (huntTrack.step(now)) {
+                            paintHeardLocked(now)
+                            publishHuntLocked()
+                        }
                     }
                     Sensor.TYPE_ACCELEROMETER -> {
                         val v = event.values
-                        val mag = kotlin.math.sqrt((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).toDouble()).toFloat()
+                        val mag = kotlin.math.sqrt(
+                            (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).toDouble(),
+                        ).toFloat()
                         val stepped = stepDetector.sample(mag, event.timestamp / 1_000_000L)
-                        if (stepped) huntTrack.step(System.currentTimeMillis()) else false
+                        if (!stepped) return@synchronized
+                        if (!hardwareSteps || accelSteps) {
+                            if (huntTrack.step(now)) {
+                                paintHeardLocked(now)
+                                publishHuntLocked()
+                            }
+                            return@synchronized
+                        }
+                        val count = huntAccelStepCounts(
+                            hardwarePresent = true,
+                            fellBack = false,
+                            hardwareHeard = hardwareHeard,
+                            watchedAt = stepWatchAt,
+                            now = now,
+                        )
+                        if (!count) {
+                            accelStreak = 0
+                            return@synchronized
+                        }
+                        accelStreak += 1
+                        if (accelStreak < ACCEL_TAKEOVER_STEPS) return@synchronized
+                        accelSteps = true
+                        if (huntTrack.step(now)) {
+                            paintHeardLocked(now)
+                            publishHuntLocked()
+                        }
                     }
-                    else -> false
                 }
             }
-            if (moved) _huntPlace.value = synchronized(motionLock) { huntTrack.position() }
         }
 
-        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) = Unit
+        override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+            if (sensor?.type != Sensor.TYPE_MAGNETIC_FIELD) return
+            synchronized(motionLock) {
+                lastMagAcc = accuracy
+                if (!huntMotion || !sawMag || !lastCompass.isFinite()) return@synchronized
+                huntTrack.heading(lastCompass, gameOrNull(), magHealthyLocked(), System.currentTimeMillis())
+            }
+        }
     }
 
-    /** Steps and phone heading, only while Hunt is open. GPS still anchors the walk. */
-    fun beginHuntMotion() {
-        val place = synchronized(motionLock) {
-            huntTrack.clear()
-            stepDetector.reset()
-            huntMotion = true
-            val fix = lastGpsFix
-            val now = System.currentTimeMillis()
-            if (fix != null && phoneFixIsCurrent(lastGpsFixAt, now)) {
-                huntTrack.gps(fix.first, fix.second, 8f, now)
-            }
-            huntTrack.position()
+    /**
+     * The plain walk still on screen, when this hunt is not on a fix.
+     * Null once that walk has been placed, or when Hunt is closed.
+     */
+    fun plainSnapshot(): HuntPlain? {
+        synchronized(motionLock) {
+            if (!huntMotion) return null
+            return huntTrack.plainPicture()
         }
-        _huntPlace.value = place
+    }
+
+    /**
+     * Steps and phone heading, only while Hunt is open.
+     * [seed] places a resumed walk that was already on a fix.
+     * [plain] continues a walk that was not on a map. [plainSamples] are its hears.
+     * A fresh hunt stays a local picture until two fresh fixes agree and the walk is still short.
+     */
+    fun beginHuntMotion(
+        seed: Pair<Double, Double>? = null,
+        plain: HuntPlain? = null,
+        plainSamples: List<GpsSample> = emptyList(),
+    ) {
+        synchronized(motionLock) {
+            huntTrack.clear()
+            val saved = readHuntStride()
+            huntTrack.setStride(saved.first, learnedAlready = saved.second)
+            stepDetector.reset()
+            sawMag = false
+            lastMagUt = Double.NaN
+            lastMagAcc = SensorManager.SENSOR_STATUS_UNRELIABLE
+            lastCompass = Double.NaN
+            lastGame = Double.NaN
+            lastHuntRssi = 127
+            lastHuntRssiAt = 0L
+            accelSteps = false
+            hardwareHeard = false
+            accelStreak = 0
+            huntMotion = true
+            val now = System.currentTimeMillis()
+            stepWatchAt = now
+            if (plain != null) huntTrack.resumePlain(plain, plainSamples)
+            val start = huntStartFix(if (plain != null) null else seed, lastGpsFix, lastGpsFixAt, lastGpsAcc, now)
+            if (start != null) {
+                if (seed != null && plain == null) {
+                    huntTrack.gps(start.first, start.second, start.third, now, fresh = true, commit = true)
+                } else {
+                    val age = now - lastGpsFixAt
+                    val fresh = age in -5_000L..5_000L
+                    huntTrack.gps(start.first, start.second, start.third, lastGpsFixAt, fresh = fresh)
+                }
+            }
+            publishHuntLocked()
+        }
         if (huntSensors) return
         val sm = getSystemService(SENSOR_SERVICE) as SensorManager
         val rotation = sm.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
-        val accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        val game = sm.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+        val magnetic = sm.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD)
+        magSensorPresent = magnetic != null
         var armed = false
-        if (rotation != null) {
-            sm.registerListener(huntSensorListener, rotation, SensorManager.SENSOR_DELAY_GAME)
-            armed = true
+        for (sensor in listOf(rotation, game, magnetic)) {
+            if (listen(sm, sensor)) armed = true
         }
-        if (accel != null) {
-            sm.registerListener(huntSensorListener, accel, SensorManager.SENSOR_DELAY_GAME)
-            armed = true
-        }
-        huntSensors = armed
+        // The step sensor counts when it is reporting. The accelerometer counts
+        // when that sensor is missing, or after it has been quiet.
+        val stepSensor = sm.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+        hardwareSteps = listen(sm, stepSensor)
+        val accel = listen(sm, sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER))
+        huntSensors = armed || hardwareSteps || accel
+    }
+
+    /** The step sensor exists, Hunt is open, and this phone has not allowed it yet. */
+    fun huntNeedsStepPermission(): Boolean {
+        if (!huntMotion || hardwareSteps || stepRecognitionGranted()) return false
+        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+        return sm.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) != null
+    }
+
+    /**
+     * The step sensor just became allowed. Give it a moment to report.
+     * The accelerometer stays registered and takes over if the sensor stays quiet.
+     * The walk already on the map stays where it is.
+     */
+    fun useHardwareSteps() {
+        if (!huntMotion || hardwareSteps || !stepRecognitionGranted()) return
+        val sm = getSystemService(SENSOR_SERVICE) as SensorManager
+        val step = sm.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) ?: return
+        val accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (accel != null) listen(sm, accel)
+        if (!listen(sm, step)) return
+        hardwareSteps = true
+        accelSteps = false
+        hardwareHeard = false
+        accelStreak = 0
+        stepWatchAt = System.currentTimeMillis()
+        synchronized(motionLock) { stepDetector.reset() }
+    }
+
+    private fun stepRecognitionGranted(): Boolean =
+        ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACTIVITY_RECOGNITION,
+        ) == PackageManager.PERMISSION_GRANTED
+
+    private fun listen(sm: SensorManager, sensor: Sensor?): Boolean {
+        if (sensor == null) return false
+        return runCatching {
+            sm.registerListener(huntSensorListener, sensor, SensorManager.SENSOR_DELAY_GAME)
+        }.getOrDefault(false)
     }
 
     fun endHuntMotion() {
@@ -217,13 +431,95 @@ class FieldwatchApp : Application() {
             sm.unregisterListener(huntSensorListener)
             huntSensors = false
         }
+        hardwareSteps = false
+        accelSteps = false
+        hardwareHeard = false
+        accelStreak = 0
         synchronized(motionLock) {
             huntMotion = false
             huntTrack.clear()
             stepDetector.reset()
+            publishHuntLocked()
         }
-        _huntPlace.value = null
     }
+
+    /** Azimuth in degrees, and degrees off flat. Null when the vector cannot be read. */
+    private fun orientationOf(values: FloatArray): DoubleArray? {
+        if (values.size < 3) return null
+        val ok = runCatching {
+            SensorManager.getRotationMatrixFromVector(rotScratch, values)
+            SensorManager.getOrientation(rotScratch, oriScratch)
+        }.isSuccess
+        if (!ok) return null
+        val azimuth = Math.toDegrees(oriScratch[0].toDouble())
+        val pitch = oriScratch[1].toDouble()
+        val roll = oriScratch[2].toDouble()
+        val face = (kotlin.math.cos(pitch) * kotlin.math.cos(roll)).coerceIn(-1.0, 1.0)
+        val tilt = Math.toDegrees(kotlin.math.acos(face))
+        return doubleArrayOf(azimuth, tilt)
+    }
+
+    private fun gameOrNull(): Double? = lastGame.takeIf { it.isFinite() }
+
+    /** A missing magnetometer, or no reading yet, stays trusted. A weak or wild field does not. */
+    private fun magHealthyLocked(): Boolean {
+        if (!magSensorPresent || !sawMag) return true
+        if (lastMagAcc < SensorManager.SENSOR_STATUS_ACCURACY_MEDIUM) return false
+        return lastMagUt in HuntTrack.MAG_MIN_UT..HuntTrack.MAG_MAX_UT
+    }
+
+    /**
+     * Color the dot's current place when this phone heard the radio recently.
+     * A quiet radio leaves that ground uncolored. The dot still moves.
+     */
+    private fun paintHeardLocked(now: Long) {
+        if (!HuntHeat.paintable(lastHuntRssi, lastHuntRssiAt, now)) return
+        huntTrack.note(lastHuntRssi, now)
+    }
+
+    private fun publishHuntLocked() {
+        if (!huntMotion) {
+            _huntPose.value = null
+            if (_huntCloud.value.isNotEmpty()) _huntCloud.value = emptyList()
+            publishedCloudGen = -1
+            return
+        }
+        val (lat, lon) = huntTrack.display()
+        val gen = huntTrack.hearGen()
+        val marks = if (gen == publishedCloudGen) {
+            _huntPose.value?.marks ?: emptyList()
+        } else {
+            val fresh = huntTrack.marks()
+            publishedCloudGen = gen
+            _huntCloud.value = fresh
+            fresh
+        }
+        _huntPose.value = HuntPose(
+            lat = lat,
+            lon = lon,
+            onGlobe = huntTrack.onGlobe(),
+            uncertaintyM = huntTrack.uncertaintyM(),
+            holdFlat = huntTrack.holdingFlat(),
+            session = huntTrack.session(),
+            attachGen = huntTrack.attachGen(),
+            marks = marks,
+        )
+    }
+
+    /** Meters, and whether that length was learned on a walk. Missing file keeps the default. */
+    private fun readHuntStride(): Pair<Double, Boolean> {
+        val text = runCatching { File(filesDir, HUNT_STRIDE_FILE).readText() }.getOrNull()?.trim()
+            ?: return HuntTrack.STRIDE_M to false
+        val meters = text.toDoubleOrNull() ?: return HuntTrack.STRIDE_M to false
+        return meters.coerceIn(HuntTrack.STRIDE_MIN_M, HuntTrack.STRIDE_MAX_M) to true
+    }
+
+    private fun writeHuntStride(meters: Double) {
+        runCatching {
+            File(filesDir, HUNT_STRIDE_FILE).writeText(meters.toString())
+        }
+    }
+
     @Volatile
     private var speedMps: Double? = null
     @Volatile
@@ -295,7 +591,10 @@ class FieldwatchApp : Application() {
         sits.startFlusher()
         places.startFlusher(scope)
         syncLocationUpdates()
-        if (config.settings.alertVoice || config.settings.gnssVoice) alerter.prepareVoice()
+        syncFlock()
+        if (config.settings.alertVoice || config.settings.gnssVoice || config.settings.anySensorAlert()) {
+            alerter.prepareVoice()
+        }
         if (config.filter.arrivalsOnly) {
             beginArrivals(keepRemembered = true)
         }
@@ -574,15 +873,68 @@ class FieldwatchApp : Application() {
         if (!plausible) return
         lastGpsFix = lat to lon
         lastGpsFixAt = at
-        val paced = synchronized(motionLock) {
+        lastGpsAcc = accuracy ?: Float.NaN
+        val learned = synchronized(motionLock) {
             if (!huntMotion) null
             else {
-                huntTrack.gps(lat, lon, accuracy ?: 12f, System.currentTimeMillis())
-                huntTrack.position()
+                val nowMs = System.currentTimeMillis()
+                val fixAt = if (at > 0L) at else nowMs
+                val age = nowMs - fixAt
+                val fresh = age in -5_000L..5_000L
+                val stride = huntTrack.gps(lat, lon, accuracy ?: 12f, fixAt, fresh = fresh)
+                paintHeardLocked(nowMs)
+                publishHuntLocked()
+                stride
             }
         }
-        if (paced != null || huntMotion) _huntPlace.value = paced
+        if (learned != null) writeHuntStride(learned)
         recordOperatorFix(lat, lon, at)
+        noteFlock(lat, lon)
+    }
+
+    /**
+     * Reload the saved camera list when the layer is on.
+     * [force] replaces a list already in memory after a download.
+     */
+    fun syncFlock(force: Boolean = false) {
+        if (!::config.isInitialized) return
+        val settings = config.settings
+        val showPlates = settings.flockLayer
+        val showOther = settings.sensorLayer
+        if (!settings.anySensorAlert()) {
+            flockLatch.clear()
+            if (::alerter.isInitialized) alerter.clearFlockNote()
+        }
+        if (!showPlates && !showOther) {
+            flockIndex.clear()
+            _flockRevision.value = flockIndex.revision
+            return
+        }
+        if (!force && flockIndex.loaded) return
+        val gen = ++flockLoadGen
+        scope.launch(Dispatchers.IO) {
+            val cameras = ArrayList<FlockCamera>()
+            if (showPlates) FlockFiles.read(filesDir, SensorList.PLATES)?.cameras?.let { cameras.addAll(it) }
+            if (showOther) FlockFiles.read(filesDir, SensorList.OTHER)?.cameras?.let { cameras.addAll(it) }
+            if (gen != flockLoadGen) return@launch
+            val now = config.settings
+            if (now.flockLayer != showPlates || now.sensorLayer != showOther) return@launch
+            if (cameras.isEmpty()) flockIndex.markMissing() else flockIndex.replace(cameras)
+            _flockRevision.value = flockIndex.revision
+        }
+    }
+
+    private fun noteFlock(lat: Double, lon: Double) {
+        if (!::config.isInitialized || !::alerter.isInitialized) return
+        val settings = config.settings
+        if (!settings.anySensorAlert()) return
+        val hit = runCatching {
+            val nearby = flockIndex.near(lat, lon, FlockApproach.REARM_M + 40.0)
+                .filter { settings.alertsFor(it.kind) }
+            flockLatch.consider(lat, lon, travelDeg, floodSpeed(), nearby)
+        }.getOrNull() ?: return
+        val (key, values) = sensorNotice(hit)
+        alerter.flockNote(if (values.isEmpty()) LanguageText.text(key) else LanguageText.text(key, values))
     }
 
     /** GPS speed in m/s, or null when the latest fix has no usable speed. */
@@ -619,6 +971,9 @@ class FieldwatchApp : Application() {
 
     companion object {
         private const val MAX_ARRIVAL_KEYS = 2_500
+        private const val HUNT_STRIDE_FILE = "hunt-stride.txt"
+        /** Walking-motion steps with a silent step sensor before that sensor is left behind. */
+        private const val ACCEL_TAKEOVER_STEPS = 3
     }
 }
 
@@ -633,4 +988,23 @@ data class ArrivalsState(
 internal fun phoneFixIsCurrent(fixAt: Long, now: Long): Boolean {
     val age = now - fixAt
     return age >= -5_000L && age <= 30_000L
+}
+
+/**
+ * Where a hunt may pin its start. A resumed walk already has a place, so it
+ * attaches. A fresh hunt passes the saved fix and the accuracy it reported.
+ * No accuracy is not a tight fix. The track still refuses anything wider than
+ * about 12 m.
+ */
+internal fun huntStartFix(
+    seed: Pair<Double, Double>?,
+    fix: Pair<Double, Double>?,
+    fixAt: Long,
+    accuracyM: Float,
+    now: Long,
+): Triple<Double, Double, Float>? {
+    if (seed != null) return Triple(seed.first, seed.second, 8f)
+    val start = fix?.takeIf { phoneFixIsCurrent(fixAt, now) } ?: return null
+    if (!accuracyM.isFinite()) return null
+    return Triple(start.first, start.second, accuracyM)
 }

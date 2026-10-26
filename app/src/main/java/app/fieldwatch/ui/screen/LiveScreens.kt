@@ -94,7 +94,9 @@ import app.fieldwatch.domain.FastPair
 import app.fieldwatch.domain.OutlineSnap
 import app.fieldwatch.domain.GpsSample
 import app.fieldwatch.domain.MapBasemap
+import app.fieldwatch.domain.MapOverlay
 import app.fieldwatch.domain.MapFrame
+import app.fieldwatch.domain.MapLookAhead
 import app.fieldwatch.ui.component.rememberMapFooter
 import app.fieldwatch.domain.ListLine
 import app.fieldwatch.domain.MacUtil
@@ -447,7 +449,11 @@ private fun LivePathSplit(
     }
     val columnHeight = remember { mutableFloatStateOf(0f) }
     var viewport by remember { mutableStateOf<SitPathPlot.Viewport?>(null) }
+    var tileWindow by remember { mutableStateOf<DoubleArray?>(null) }
+    val tileWindowKey = tileWindow?.let { SitPathPlot.tileWindowKey(it) }.orEmpty()
     val tiles by vm.livePathTiles.collectAsStateWithLifecycle()
+    val zoomIn by vm.livePathZoomIn.collectAsStateWithLifecycle()
+    val flockRevision by vm.flockRevision.collectAsStateWithLifecycle()
     val names = remember(state.watchlist) { RadioBookmarks.labels(state.watchlist) }
     val model = remember(
         state.operatorPath,
@@ -472,21 +478,33 @@ private fun LivePathSplit(
     }
     val online = state.settings.onlineLookup
     val basemap = state.settings.mapBasemap
+    val overlays = state.settings.mapOverlays
     val mapKeyRev by vm.mapKeyRevision.collectAsStateWithLifecycle()
     val mapFrame = MapFrame.resolved(state.settings.mapFrame, state.settings.mapRotate)
-    val tileKey = remember(state.operatorPath, online, basemap, mapKeyRev) {
-        livePathTileKey(state.operatorPath, online, basemap, mapKeyRev)
+    val tileKey = remember(state.operatorPath, online, basemap, overlays, mapKeyRev) {
+        livePathTileKey(state.operatorPath, online, basemap, overlays, mapKeyRev)
     }
     val tip = state.operatorPath.lastOrNull()
     val tipBucket = if (tip == null) "" else {
         "${(tip.lat * 2500.0).toInt()}:${(tip.lon * 2500.0).toInt()}"
     }
-    LaunchedEffect(tileKey, viewport, mapFrame, tipBucket) {
+    val course = state.travelDeg
+    val courseKey = if (course.isFinite()) (course / MapLookAhead.TURN_DEG).toInt() else Int.MIN_VALUE
+    val heldMap = viewport != null
+    val screenTip = if (!heldMap && tileWindow == null) tipBucket else ""
+    LaunchedEffect(tileKey, mapFrame, tileWindowKey, heldMap, screenTip) {
         val held = viewport
+        val window = tileWindow
         when {
+            window != null -> {
+                vm.refreshLivePathArea(
+                    window[0], window[1], window[2], window[3],
+                    online, basemap, overlays,
+                    held = held != null,
+                )
+            }
             held != null -> {
-                delay(350)
-                vm.refreshLivePathViewport(held, online, basemap)
+                vm.refreshLivePathViewport(held, online, basemap, overlays, held = true)
             }
             MapFrame.zoomed(mapFrame) && tip != null -> {
                 vm.refreshLivePathViewport(
@@ -498,9 +516,35 @@ private fun LivePathSplit(
                     ),
                     online,
                     basemap,
+                    overlays,
                 )
             }
-            else -> vm.refreshLivePathTiles(state.operatorPath, online, basemap)
+            else -> vm.refreshLivePathTiles(state.operatorPath, online, basemap, overlays)
+        }
+    }
+    LaunchedEffect(tileKey, mapFrame, tileWindowKey, courseKey, heldMap, tipBucket) {
+        if (heldMap) return@LaunchedEffect
+        val window = tileWindow
+        val ahead = if (course.isFinite()) {
+            window ?: if (MapFrame.zoomed(mapFrame) && tip != null) {
+                SitPathPlot.Viewport(
+                    tip.lat,
+                    tip.lon,
+                    MapFrame.CLOSE_TILE_HALF_M,
+                    MapFrame.CLOSE_TILE_HALF_M,
+                ).coveredBounds()
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+        if (ahead != null) {
+            vm.prefetchLivePath(
+                ahead[0], ahead[1], ahead[2], ahead[3], course, online, basemap, overlays,
+            )
+        } else {
+            vm.stopLivePrefetch()
         }
     }
     val split = splitState.floatValue
@@ -552,6 +596,13 @@ private fun LivePathSplit(
                         state.phoneLon,
                         state.settings.demoMode,
                     ),
+                    zoomIn = zoomIn,
+                    flock = state.settings.flockLayer || state.settings.sensorLayer,
+                    flockIndex = vm.flockIndex,
+                    flockRevision = flockRevision,
+                    onTileWindow = { next ->
+                        if (SitPathPlot.tileWindowKey(next) != tileWindowKey) tileWindow = next
+                    },
                 )
             }
         }
@@ -600,11 +651,13 @@ private fun livePathTileKey(
     samples: List<GpsSample>,
     online: Boolean,
     basemap: MapBasemap,
+    overlays: Set<MapOverlay>,
     mapKeyRev: Int,
 ): String {
     if (!online || samples.isEmpty()) return "off"
     val end = samples.last()
-    return "$mapKeyRev:${basemap.name}:${samples.size / 4}:${(end.lat * 1000.0).roundToInt()}:${(end.lon * 1000.0).roundToInt()}"
+    return "$mapKeyRev:${basemap.name}:${MapOverlay.key(overlays)}:${samples.size / 4}:" +
+        "${(end.lat * 1000.0).roundToInt()}:${(end.lon * 1000.0).roundToInt()}"
 }
 
 @Composable

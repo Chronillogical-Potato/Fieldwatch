@@ -196,10 +196,11 @@ object DebriefReport {
         floods: List<FloodBurst> = emptyList(),
         gnss: List<GnssMark> = emptyList(),
         placeRecords: List<PlaceMemory.Record> = emptyList(),
+        cameras: PathCameras.Report? = null,
     ): String = document(
         devices, fleets, settings, operatorPath, now, places, window,
         customNames, observerNotes, bookmarkedKeys, watchedFleetIds, mineKeys,
-        floods, gnss, placeRecords,
+        floods, gnss, placeRecords, cameras,
     ).toPlainText()
 
     fun document(
@@ -218,6 +219,7 @@ object DebriefReport {
         floods: List<FloodBurst> = emptyList(),
         gnss: List<GnssMark> = emptyList(),
         placeRecords: List<PlaceMemory.Record> = emptyList(),
+        cameras: PathCameras.Report? = null,
     ): DebriefDoc {
         val names = fleets.associate { it.id to it.name }
         val win = window ?: DebriefWindow(now - WINDOW_MS, now)
@@ -242,6 +244,10 @@ object DebriefReport {
         val gnssOnPath = gnssPins.isNotEmpty()
         val pathSpan = Geo.spanM(path)
         val pathLen = Geo.pathLengthM(path)
+        val cameraTally = cameras?.let { source ->
+            PathCameras.tally(path, source.plates, source.others, source.near)
+        }
+        val cameraBody = cameraTally?.let { PathCameras.text(it) }
         val trackers = inWin.filter { TrackerMatch.kind(it, names) == TrackerMatch.Kind.FINDER }
         val follow = followAssessments(trackers, names, path, windowStart, windowEnd, TrackerMatch.Kind.FINDER)
         val beaconFollow = followAssessments(
@@ -441,6 +447,9 @@ object DebriefReport {
                 chart = classChart(inWin, fleets),
             ))
             add(DebriefSection(next(), LanguageText.text("ui.where.were"), whereYouWere(settings, path, pathLen, pathSpan, inWin, names, places, windowEnd, customNames, bookmarkedKeys)))
+            if (cameraBody != null) {
+                add(DebriefSection(next(), LanguageText.text("ui.cameras.on.path"), cameraBody))
+            }
             if (aircraftBody.isNotEmpty()) {
                 add(DebriefSection(next(), LanguageText.text("ui.aircraft.label"), aircraftBody))
             }
@@ -619,7 +628,7 @@ object DebriefReport {
                 pathFigure(
                     win.sitName ?: LanguageText.text("ui.last.15.minutes"), path, inWin, fleets,
                     customNames, observerNotes, bookmarkedKeys, watchedFleetIds, mineKeys,
-                    gnssPins,
+                    gnssPins, cameraTally?.cameras.orEmpty(),
                 ),
                 pictures,
                 secondary = false,
@@ -639,6 +648,7 @@ object DebriefReport {
         watchedFleetIds: Set<String> = emptySet(),
         mineKeys: Set<String> = emptySet(),
         gnss: List<SitPathPlot.GnssPin> = emptyList(),
+        pathCameras: List<FlockCamera> = emptyList(),
     ): SitPathPlot.Figure? {
         val path = Geo.despikePath(path)
         if (path.size < 2) return null
@@ -669,6 +679,7 @@ object DebriefReport {
             spanM = Geo.spanM(path),
             caption = caption,
             gnss = gnss,
+            cameras = pathCameras,
         )
     }
 
