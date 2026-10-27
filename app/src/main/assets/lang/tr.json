@@ -1202,6 +1202,23 @@
     "ui.cameras.on.path": "Bilinen kameralar rotada",
     "ui.cameras.within": "Yaklaşık {meters} m",
     "ui.cameras.facing.count": "{count} rotaya bakıyor",
-    "ui.cameras.near.count": "{count} rotada yön yok"
+    "ui.cameras.near.count": "{count} rotada yön yok",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Bu telefon, port {port}",
+    "diag.tak.dest.lan": "LAN multicast, port {port}",
+    "diag.tak.dest.other": "Başka uç, port {port}",
+    "diag.tak.loopback": "Loopback soketi",
+    "diag.tak.loopback.closed": "açık değil",
+    "diag.tak.loopback.lo": "lo arabirimine bağlı",
+    "diag.tak.loopback.failed": "bağlama olmadı ({error})",
+    "diag.tak.opened": "Soket açıkken",
+    "diag.tak.opened.none": "ağ yok",
+    "diag.tak.opened.cellular": "yalnızca hücresel",
+    "diag.tak.opened.wifi": "Wi-Fi bağlı",
+    "diag.tak.opened.ethernet": "Ethernet bağlı",
+    "diag.tak.send": "Son gönderim",
+    "diag.tak.send.ok": "oldu",
+    "diag.tak.send.fail": "gönderim olmadı",
+    "diag.tak.send.none": "henüz yok"
   }
 }

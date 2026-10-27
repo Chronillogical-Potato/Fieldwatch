@@ -1142,6 +1142,23 @@
     "ui.cameras.on.path": "Zināmās kameras uz ceļa",
     "ui.cameras.within": "Apmēram {meters} m",
     "ui.cameras.facing.count": "{count} uz ceļu",
-    "ui.cameras.near.count": "{count} uz ceļa bez virziena"
+    "ui.cameras.near.count": "{count} uz ceļa bez virziena",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Šis tālrunis, ports {port}",
+    "diag.tak.dest.lan": "LAN multicast, ports {port}",
+    "diag.tak.dest.other": "Cits hosts, ports {port}",
+    "diag.tak.loopback": "Loopback ligzda",
+    "diag.tak.loopback.closed": "nav atvērta",
+    "diag.tak.loopback.lo": "piesaistīta lo",
+    "diag.tak.loopback.failed": "bind neizdevās ({error})",
+    "diag.tak.opened": "Ligzda atvērta, kamēr",
+    "diag.tak.opened.none": "nav tīkla",
+    "diag.tak.opened.cellular": "tikai mobilais",
+    "diag.tak.opened.wifi": "Wi-Fi savienots",
+    "diag.tak.opened.ethernet": "Ethernet savienots",
+    "diag.tak.send": "Pēdējā sūtīšana",
+    "diag.tak.send.ok": "izdevās",
+    "diag.tak.send.fail": "sūtīšana neizdevās",
+    "diag.tak.send.none": "vēl nav"
   }
 }

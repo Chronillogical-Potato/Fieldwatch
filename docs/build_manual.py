@@ -479,7 +479,7 @@ def draw_cover(c, doc):
         y -= 16
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 9)
-    c.drawString(48, 108, "Version 1.1.33")
+    c.drawString(48, 108, "Version 1.1.34")
     c.drawString(48, 94, "27 October 2026")
     c.drawString(48, 80, "Package  app.fieldwatch   ·   Android 10+ (API 29)   ·   Target API 35")
     c.setStrokeColor(colors.HexColor("#2A3340"))
@@ -520,7 +520,7 @@ def draw_body(c, doc):
     c.line(48, 40, PAGE_W - 48, 40)
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 8)
-    c.drawString(48, 28, "v1.1.33  ·  Off Grid Pete LLC")
+    c.drawString(48, 28, "v1.1.34  ·  Off Grid Pete LLC")
     draw_ig_mark(c, 148, 30, 5.2, MUTED)
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 8)
@@ -2343,6 +2343,17 @@ def story():
             "License plate reader cameras is the United States plate-reader list, about 37 MB. Flock is blue. Other companies are amber. When the file names the company, the voice uses that name. "
             "Other sensors is about 1 MB. Speed cameras are teal. Red light cameras are red. Gunshot detectors are purple dots. Other cameras are gray. "
             "The line under Other sensors still groups them as speed cameras, red lights, gunshot detectors, and other cameras. The voice switch for the red ones says Alert for red light cameras.",
+            "body_left",
+        ),
+        P(
+            "<b>OpenStreetMap is the source.</b> Both lists are places people have added to OpenStreetMap. "
+            "Someone adds a point and tags what it is: a plate reader, a speed camera, a red light, a gunshot detector, or another camera. "
+            "A direction is stored only when that person entered one. "
+            "The plate-reader list is those plate-reader tags for the United States. "
+            "Other sensors is the speed-camera, red-light, gunshot-detector, and other-camera tags for the United States. "
+            "Fieldwatch publishes that second file. The phone downloads both. "
+            "When the marks are on, the map credit includes © OpenStreetMap contributors, under the Open Database License. "
+            "A correction is made on OpenStreetMap. Update on that row can bring the newer file.",
             "body_left",
         ),
         figure_wrap(
@@ -6483,8 +6494,8 @@ def story():
                 ["X", "@OGridPete"],
                 ["Document", "User Manual and Technical Documentation"],
                 ["Application ID", "app.fieldwatch"],
-                ["Software version", "1.1.33 (versionCode 43), field build of 27 October 2026"],
-                ["Document version", "1.1.33"],
+                ["Software version", "1.1.34 (versionCode 44), field build of 27 October 2026"],
+                ["Document version", "1.1.34"],
                 ["Document date", "27 October 2026"],
                 ["License", "MIT License (see LICENSE); third-party: NOTICE"],
                 ["Platform", "Android 10+ (minSdk 29), targetSdk 35"],

@@ -12,8 +12,10 @@ import app.fieldwatch.domain.Fleet
 import app.fieldwatch.domain.GnssLive
 import app.fieldwatch.domain.GnssNotice
 import app.fieldwatch.domain.Sighting
+import app.fieldwatch.domain.TakBirth
 import app.fieldwatch.domain.TakDefaults
 import app.fieldwatch.domain.TakFeedStatus
+import app.fieldwatch.domain.TakLoopbackFacts
 import app.fieldwatch.domain.TakGnss
 import app.fieldwatch.domain.TakGnssTrack
 import app.fieldwatch.domain.TakHeardHere
@@ -36,8 +38,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Sends Cursor-on-Target UDP to ATAK SA multicast or a unicast host:port.
  * Same-phone ATAK often ignores multicast loopback, so unicast also hits
- * 127.0.0.1 on the same port. That loopback socket is bound to lo, so This
- * phone still reaches ATAK when no Wi-Fi is joined. A unicast or multicast
+ * 127.0.0.1 on the same port. The loopback socket is pinned to lo before it
+ * is bound. A loopback socket opened with no Wi-Fi or Ethernet is replaced
+ * once either is connected, including when cellular was already up. One
+ * opened on that LAN stays after the LAN drops. A unicast or multicast
  * socket opened with no network is replaced once a network exists. A socket
  * opened on a network is kept after that network drops. Privacy mode skips the feed.
  */
@@ -57,9 +61,15 @@ class TakPublisher(context: Context? = null) {
     /** True when that socket was opened while the phone had no network. */
     private var multicastOffline = false
     private var unicastOffline = false
-    private var loopbackOffline = false
-    /** True when the loopback socket is bound to lo. */
+    /** True when the loopback socket is pinned to lo. */
     private var loopbackOnLo = false
+    /** True when the loopback socket was opened while Wi-Fi or Ethernet was connected. */
+    private var loopbackOnLan = false
+    private var loopbackBirth = TakBirth.NONE
+    /** Exception name when the pin to lo failed. Empty when it succeeded. */
+    private var loopbackBindError: String? = null
+    /** Null until a datagram send is attempted. */
+    private var lastSendOk: Boolean? = null
     private val _status = MutableStateFlow(TakFeedStatus())
     val status: StateFlow<TakFeedStatus> = _status.asStateFlow()
 
@@ -456,8 +466,10 @@ class TakPublisher(context: Context? = null) {
             loopback = null
             multicastOffline = false
             unicastOffline = false
-            loopbackOffline = false
             loopbackOnLo = false
+            loopbackOnLan = false
+            loopbackBirth = TakBirth.NONE
+            loopbackBindError = null
         }
         last.clear()
         parked.clear()
@@ -526,8 +538,23 @@ class TakPublisher(context: Context? = null) {
                 true
             }.onFailure { err ->
                 Log.w(TAG, "TAK send ${addr.hostAddress}:$port failed: $err")
+            }.also { result ->
+                lastSendOk = result.getOrDefault(false)
             }.getOrDefault(false)
         }
+    }
+
+    /** Same-phone socket facts for Diagnostics. No host address. */
+    fun loopbackFacts(): TakLoopbackFacts = synchronized(gate) {
+        val sock = loopback
+        val open = sock != null && !sock.isClosed
+        TakLoopbackFacts(
+            open = open,
+            pinned = open && loopbackOnLo,
+            bindError = if (open && !loopbackOnLo) loopbackBindError else null,
+            birth = if (open) loopbackBirth else null,
+            lastSendOk = lastSendOk,
+        )
     }
 
     private fun multicastSock(): MulticastSocket = synchronized(gate) {
@@ -560,34 +587,46 @@ class TakPublisher(context: Context? = null) {
     }
 
     /**
-     * 127.0.0.1. Bound to lo so Android does not drop it when no network is up.
-     * If that bind fails, a socket opened offline is replaced once a network exists.
+     * 127.0.0.1. Pinned to lo before bind so a cellular-only start can still
+     * reach ATAK. If that pin does not stick, the socket is replaced once
+     * Wi-Fi or Ethernet connects, including when cellular was already up.
      */
     private fun loopbackSock(): DatagramSocket = synchronized(gate) {
-        val online = networkUp()
+        val nets = networks()
         val open = loopback
-        val replace = !loopbackOnLo && replaceTakSocket(loopbackOffline, online)
+        val replace = replaceLoopbackSocket(loopbackOnLan, nets.lan)
         if (open != null && !open.isClosed && !replace) return open
         if (open != null) runCatching { open.close() }
         val sock = DatagramSocket(null)
         sock.reuseAddress = true
-        sock.bind(InetSocketAddress(InetAddress.getByAddress(LOOPBACK_V4), 0))
-        loopbackOnLo = bindLoopback(sock)
-        loopback = sock
-        loopbackOffline = !online
-        if (loopbackOnLo) {
-            Log.i(TAG, "TAK loopback socket bound to lo")
+        var pinned = pinLoopback(sock)
+        try {
+            sock.bind(InetSocketAddress(InetAddress.getByAddress(LOOPBACK_V4), 0))
+        } catch (err: Exception) {
+            runCatching { sock.close() }
+            throw err
         }
+        if (!pinned) pinned = pinLoopback(sock)
+        loopbackOnLo = pinned
+        if (pinned) loopbackBindError = null
+        loopback = sock
+        loopbackOnLan = nets.lan
+        loopbackBirth = nets.birth
+        if (pinned) Log.i(TAG, "TAK loopback socket bound to lo")
         sock
     }
 
     /**
-     * SetsockoptIfreq is hidden. Bind to lo anyway so 127.0.0.1 is not dropped
-     * when the phone has no network. A failure falls back to replacing this
-     * socket once a network exists.
+     * SetsockoptIfreq is hidden. Pin lo before the socket is bound so Android
+     * does not drop 127.0.0.1 when the default network is cellular or missing.
+     * A failure is retried once after bind. The exception name is kept for Diagnostics.
      */
-    private fun bindLoopback(sock: DatagramSocket): Boolean {
-        val held = ParcelFileDescriptor.fromDatagramSocket(sock)
+    private fun pinLoopback(sock: DatagramSocket): Boolean {
+        val held = runCatching { ParcelFileDescriptor.fromDatagramSocket(sock) }.getOrElse { err ->
+            loopbackBindError = takBindError(err)
+            Log.w(TAG, "TAK loopback device bind failed: $err")
+            return false
+        }
         return try {
             val method = Class.forName("android.system.Os").getMethod(
                 "setsockoptIfreq",
@@ -605,11 +644,34 @@ class TakPublisher(context: Context? = null) {
             )
             true
         } catch (err: Throwable) {
+            loopbackBindError = takBindError(err)
             Log.w(TAG, "TAK loopback device bind failed: $err")
             false
         } finally {
             runCatching { held.close() }
         }
+    }
+
+    private data class NetFacts(val lan: Boolean, val birth: TakBirth)
+
+    /** Every connected network. A Wi-Fi link with no internet still counts. */
+    private fun networks(): NetFacts {
+        val context = appContext ?: return NetFacts(lan = false, birth = TakBirth.NONE)
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return NetFacts(lan = false, birth = TakBirth.NONE)
+        var wifi = false
+        var ethernet = false
+        var cellular = false
+        for (network in cm.allNetworks) {
+            val caps = cm.getNetworkCapabilities(network) ?: continue
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) wifi = true
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) ethernet = true
+            if (caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) cellular = true
+        }
+        return NetFacts(
+            lan = takLanUp(wifi, ethernet),
+            birth = takBirth(wifi, ethernet, cellular),
+        )
     }
 
     private fun networkUp(): Boolean {

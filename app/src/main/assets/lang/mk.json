@@ -1151,6 +1151,23 @@
     "ui.cameras.on.path": "Познати камери на патеката",
     "ui.cameras.within": "Во околу {meters} m",
     "ui.cameras.facing.count": "{count} кон патеката",
-    "ui.cameras.near.count": "{count} на патеката без правец"
+    "ui.cameras.near.count": "{count} на патеката без правец",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Овој телефон, порта {port}",
+    "diag.tak.dest.lan": "LAN multicast, порта {port}",
+    "diag.tak.dest.other": "Друг хост, порта {port}",
+    "diag.tak.loopback": "Loopback приклучок",
+    "diag.tak.loopback.closed": "не е отворен",
+    "diag.tak.loopback.lo": "врзан на lo",
+    "diag.tak.loopback.failed": "bind не успеа ({error})",
+    "diag.tak.opened": "Приклучок отворен при",
+    "diag.tak.opened.none": "нема мрежа",
+    "diag.tak.opened.cellular": "само мобилна",
+    "diag.tak.opened.wifi": "Wi-Fi поврзан",
+    "diag.tak.opened.ethernet": "Ethernet поврзан",
+    "diag.tak.send": "Последно праќање",
+    "diag.tak.send.ok": "успеа",
+    "diag.tak.send.fail": "праќањето не успеа",
+    "diag.tak.send.none": "уште нема"
   }
 }

@@ -1151,6 +1151,23 @@
     "ui.cameras.on.path": "Teadaolevad kaamerad rajal",
     "ui.cameras.within": "Umbes {meters} m",
     "ui.cameras.facing.count": "{count} raja poole",
-    "ui.cameras.near.count": "{count} rajal ilma suunata"
+    "ui.cameras.near.count": "{count} rajal ilma suunata",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "See telefon, port {port}",
+    "diag.tak.dest.lan": "LAN multicast, port {port}",
+    "diag.tak.dest.other": "Muu host, port {port}",
+    "diag.tak.loopback": "Loopback-sokkel",
+    "diag.tak.loopback.closed": "pole avatud",
+    "diag.tak.loopback.lo": "seotud lo külge",
+    "diag.tak.loopback.failed": "sidumine ebaõnnestus ({error})",
+    "diag.tak.opened": "Sokkel avati kui",
+    "diag.tak.opened.none": "võrku pole",
+    "diag.tak.opened.cellular": "ainult mobiil",
+    "diag.tak.opened.wifi": "Wi-Fi ühendatud",
+    "diag.tak.opened.ethernet": "Ethernet ühendatud",
+    "diag.tak.send": "Viimane saatmine",
+    "diag.tak.send.ok": "õnnestus",
+    "diag.tak.send.fail": "saatmine ebaõnnestus",
+    "diag.tak.send.none": "veel pole"
   }
 }

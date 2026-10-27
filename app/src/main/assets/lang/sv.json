@@ -1193,6 +1193,23 @@
     "ui.cameras.on.path": "Kända kameror på spåret",
     "ui.cameras.within": "Inom ungefär {meters} m",
     "ui.cameras.facing.count": "{count} mot spåret",
-    "ui.cameras.near.count": "{count} på spåret utan riktning"
+    "ui.cameras.near.count": "{count} på spåret utan riktning",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Den här telefonen, port {port}",
+    "diag.tak.dest.lan": "LAN-multicast, port {port}",
+    "diag.tak.dest.other": "Annan värd, port {port}",
+    "diag.tak.loopback": "Loopback-socket",
+    "diag.tak.loopback.closed": "inte öppen",
+    "diag.tak.loopback.lo": "bunden till lo",
+    "diag.tak.loopback.failed": "bind misslyckades ({error})",
+    "diag.tak.opened": "Socket öppnad medan",
+    "diag.tak.opened.none": "inget nät",
+    "diag.tak.opened.cellular": "bara mobil",
+    "diag.tak.opened.wifi": "Wi-Fi anslutet",
+    "diag.tak.opened.ethernet": "Ethernet anslutet",
+    "diag.tak.send": "Senaste sändning",
+    "diag.tak.send.ok": "lyckades",
+    "diag.tak.send.fail": "sändning misslyckades",
+    "diag.tak.send.none": "ingen sändning än"
   }
 }

@@ -1202,6 +1202,23 @@
     "ui.cameras.on.path": "Znane kamere na poti",
     "ui.cameras.within": "V približno {meters} m",
     "ui.cameras.facing.count": "{count} proti poti",
-    "ui.cameras.near.count": "{count} na poti brez smeri"
+    "ui.cameras.near.count": "{count} na poti brez smeri",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Ta telefon, vrata {port}",
+    "diag.tak.dest.lan": "LAN multicast, vrata {port}",
+    "diag.tak.dest.other": "Drug gostitelj, vrata {port}",
+    "diag.tak.loopback": "Loopback vtičnica",
+    "diag.tak.loopback.closed": "ni odprt",
+    "diag.tak.loopback.lo": "vezan na lo",
+    "diag.tak.loopback.failed": "bind ni uspel ({error})",
+    "diag.tak.opened": "Vtičnica odprta ob",
+    "diag.tak.opened.none": "ni omrežja",
+    "diag.tak.opened.cellular": "samo mobilno",
+    "diag.tak.opened.wifi": "Wi-Fi povezan",
+    "diag.tak.opened.ethernet": "Ethernet povezan",
+    "diag.tak.send": "Zadnje pošiljanje",
+    "diag.tak.send.ok": "uspelo",
+    "diag.tak.send.fail": "pošiljanje ni uspelo",
+    "diag.tak.send.none": "še nič"
   }
 }

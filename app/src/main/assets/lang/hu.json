@@ -1200,6 +1200,23 @@
     "ui.cameras.on.path": "Ismert kamerák az úton",
     "ui.cameras.within": "Körülbelül {meters} m-en belül",
     "ui.cameras.facing.count": "{count} az út felé",
-    "ui.cameras.near.count": "{count} az úton irány nélkül"
+    "ui.cameras.near.count": "{count} az úton irány nélkül",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Ez a telefon, port {port}",
+    "diag.tak.dest.lan": "LAN multicast, port {port}",
+    "diag.tak.dest.other": "Másik gép, port {port}",
+    "diag.tak.loopback": "Loopback socket",
+    "diag.tak.loopback.closed": "nincs nyitva",
+    "diag.tak.loopback.lo": "lo-hoz kötve",
+    "diag.tak.loopback.failed": "kötés sikertelen ({error})",
+    "diag.tak.opened": "Socket nyitva, miközben",
+    "diag.tak.opened.none": "nincs hálózat",
+    "diag.tak.opened.cellular": "csak mobil",
+    "diag.tak.opened.wifi": "Wi-Fi csatlakozva",
+    "diag.tak.opened.ethernet": "Ethernet csatlakozva",
+    "diag.tak.send": "Utolsó küldés",
+    "diag.tak.send.ok": "sikerült",
+    "diag.tak.send.fail": "küldés sikertelen",
+    "diag.tak.send.none": "még nem küldött"
   }
 }

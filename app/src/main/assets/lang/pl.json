@@ -1200,6 +1200,23 @@
     "ui.cameras.on.path": "Znane kamery na ścieżce",
     "ui.cameras.within": "W odległości około {meters} m",
     "ui.cameras.facing.count": "{count} w stronę ścieżki",
-    "ui.cameras.near.count": "{count} na ścieżce bez kierunku"
+    "ui.cameras.near.count": "{count} na ścieżce bez kierunku",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Ten telefon, port {port}",
+    "diag.tak.dest.lan": "Multicast LAN, port {port}",
+    "diag.tak.dest.other": "Inny host, port {port}",
+    "diag.tak.loopback": "Gniazdo loopback",
+    "diag.tak.loopback.closed": "nieotwarte",
+    "diag.tak.loopback.lo": "związane z lo",
+    "diag.tak.loopback.failed": "bind nieudany ({error})",
+    "diag.tak.opened": "Gniazdo otwarte przy",
+    "diag.tak.opened.none": "brak sieci",
+    "diag.tak.opened.cellular": "tylko sieć komórkowa",
+    "diag.tak.opened.wifi": "Wi-Fi połączone",
+    "diag.tak.opened.ethernet": "Ethernet połączony",
+    "diag.tak.send": "Ostatnie nadanie",
+    "diag.tak.send.ok": "udane",
+    "diag.tak.send.fail": "nadanie nieudane",
+    "diag.tak.send.none": "jeszcze brak"
   }
 }

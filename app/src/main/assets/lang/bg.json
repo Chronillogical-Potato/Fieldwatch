@@ -1207,6 +1207,23 @@
     "ui.cameras.on.path": "Познати камери по пътя",
     "ui.cameras.within": "В около {meters} m",
     "ui.cameras.facing.count": "{count} към пътя",
-    "ui.cameras.near.count": "{count} на пътя без посока"
+    "ui.cameras.near.count": "{count} на пътя без посока",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Този телефон, порт {port}",
+    "diag.tak.dest.lan": "LAN multicast, порт {port}",
+    "diag.tak.dest.other": "Друг хост, порт {port}",
+    "diag.tak.loopback": "Loopback сокет",
+    "diag.tak.loopback.closed": "затворен",
+    "diag.tak.loopback.lo": "вързан към lo",
+    "diag.tak.loopback.failed": "bind неуспешен ({error})",
+    "diag.tak.opened": "Сокетът е отворен при",
+    "diag.tak.opened.none": "няма мрежа",
+    "diag.tak.opened.cellular": "само клетъчна",
+    "diag.tak.opened.wifi": "Wi-Fi свързан",
+    "diag.tak.opened.ethernet": "Ethernet свързан",
+    "diag.tak.send": "Последно пращане",
+    "diag.tak.send.ok": "успешно",
+    "diag.tak.send.fail": "пращането се провали",
+    "diag.tak.send.none": "още няма"
   }
 }

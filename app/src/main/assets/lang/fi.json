@@ -1200,6 +1200,23 @@
     "ui.cameras.on.path": "Tunnetut kamerat polulla",
     "ui.cameras.within": "Noin {meters} m",
     "ui.cameras.facing.count": "{count} polkua kohti",
-    "ui.cameras.near.count": "{count} polulla ilman suuntaa"
+    "ui.cameras.near.count": "{count} polulla ilman suuntaa",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Tämä puhelin, portti {port}",
+    "diag.tak.dest.lan": "LAN-multicast, portti {port}",
+    "diag.tak.dest.other": "Muu isäntä, portti {port}",
+    "diag.tak.loopback": "Loopback-socket",
+    "diag.tak.loopback.closed": "ei auki",
+    "diag.tak.loopback.lo": "sidottu lo:hon",
+    "diag.tak.loopback.failed": "bind epäonnistui ({error})",
+    "diag.tak.opened": "Socket avattiin kun",
+    "diag.tak.opened.none": "ei verkkoa",
+    "diag.tak.opened.cellular": "vain matkapuhelin",
+    "diag.tak.opened.wifi": "Wi-Fi yhdistetty",
+    "diag.tak.opened.ethernet": "Ethernet yhdistetty",
+    "diag.tak.send": "Viime lähetys",
+    "diag.tak.send.ok": "onnistui",
+    "diag.tak.send.fail": "lähetys epäonnistui",
+    "diag.tak.send.none": "ei lähetystä vielä"
   }
 }

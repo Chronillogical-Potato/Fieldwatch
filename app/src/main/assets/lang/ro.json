@@ -1196,6 +1196,23 @@
     "ui.cameras.on.path": "Camere cunoscute pe traseu",
     "ui.cameras.within": "La circa {meters} m",
     "ui.cameras.facing.count": "{count} spre traseu",
-    "ui.cameras.near.count": "{count} pe traseu fără direcție"
+    "ui.cameras.near.count": "{count} pe traseu fără direcție",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Acest telefon, port {port}",
+    "diag.tak.dest.lan": "Multicast LAN, port {port}",
+    "diag.tak.dest.other": "Alt host, port {port}",
+    "diag.tak.loopback": "Socket loopback",
+    "diag.tak.loopback.closed": "închis",
+    "diag.tak.loopback.lo": "legat de lo",
+    "diag.tak.loopback.failed": "bind eșuat ({error})",
+    "diag.tak.opened": "Socket deschis cât",
+    "diag.tak.opened.none": "fără rețea",
+    "diag.tak.opened.cellular": "doar celular",
+    "diag.tak.opened.wifi": "Wi-Fi conectat",
+    "diag.tak.opened.ethernet": "Ethernet conectat",
+    "diag.tak.send": "Ultima trimitere",
+    "diag.tak.send.ok": "reușit",
+    "diag.tak.send.fail": "trimitere eșuată",
+    "diag.tak.send.none": "încă nimic"
   }
 }

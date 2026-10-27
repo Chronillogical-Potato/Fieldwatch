@@ -1149,6 +1149,23 @@
     "ui.cameras.on.path": "Kamera të njohura në shteg",
     "ui.cameras.within": "Brenda rreth {meters} m",
     "ui.cameras.facing.count": "{count} drejt shtegut",
-    "ui.cameras.near.count": "{count} në shteg pa drejtim"
+    "ui.cameras.near.count": "{count} në shteg pa drejtim",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Ky telefon, porta {port}",
+    "diag.tak.dest.lan": "LAN multicast, porta {port}",
+    "diag.tak.dest.other": "Tjetër host, porta {port}",
+    "diag.tak.loopback": "Socket loopback",
+    "diag.tak.loopback.closed": "jo i hapur",
+    "diag.tak.loopback.lo": "lidhur me lo",
+    "diag.tak.loopback.failed": "bind dështoi ({error})",
+    "diag.tak.opened": "Socket i hapur kur",
+    "diag.tak.opened.none": "pa rrjet",
+    "diag.tak.opened.cellular": "vetëm celular",
+    "diag.tak.opened.wifi": "Wi-Fi i lidhur",
+    "diag.tak.opened.ethernet": "Ethernet i lidhur",
+    "diag.tak.send": "Dërgimi i fundit",
+    "diag.tak.send.ok": "ia doli",
+    "diag.tak.send.fail": "dërgimi dështoi",
+    "diag.tak.send.none": "ende asgjë"
   }
 }

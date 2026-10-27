@@ -87,6 +87,18 @@ data class ScanPhoneFacts(
     val unrestrictedBattery: Boolean = false,
 )
 
+/** TAK rows on Diagnostics. The host address is not included. */
+data class TakDiagFacts(
+    val enabled: Boolean = false,
+    val preset: TakUdpPreset = TakUdpPreset.THIS_PHONE,
+    val port: Int = TakDefaults.PORT,
+    val open: Boolean = false,
+    val pinned: Boolean = false,
+    val bindError: String? = null,
+    val birth: TakBirth? = null,
+    val lastSendOk: Boolean? = null,
+)
+
 data class ScanStatusReport(
     val rows: List<Pair<String, String>>,
     val verdict: String,
@@ -103,6 +115,7 @@ object ScanStatus {
         now: Long,
         radiosOnAir: Int = 0,
         gnssRows: List<Pair<String, String>> = emptyList(),
+        tak: TakDiagFacts = TakDiagFacts(),
     ): ScanStatusReport {
         val rows = listOf(
             LanguageText.text("ui.app.label") to "${phone.versionName} (${phone.versionCode})",
@@ -122,7 +135,7 @@ object ScanStatus {
             LanguageText.text("ui.location.permission") to if (phone.locationPermission) LanguageText.text("diag.granted") else LanguageText.text("diag.missing"),
             LanguageText.text("ui.gps.fix") to ageLabel(phone.gpsFixAgeMs),
             LanguageText.text("tab.filters") to filtersLabel(phone),
-        ) + gnssRows
+        ) + takRows(tak) + gnssRows
         val verdict = verdict(radio, phone, radiosOnAir)
         val checks = checks(radio, phone, radiosOnAir)
         val blocked = isBlocked(radio, phone.locationOn, phone.locationPermission)
@@ -144,6 +157,46 @@ object ScanStatus {
 
     /** Appended to an empty Live list while a scan is blocked. */
     val EMPTY_POINTER get() = LanguageText.text("ui.settings.diagnostics")
+
+    private fun takRows(tak: TakDiagFacts): List<Pair<String, String>> {
+        val port = tak.port.coerceIn(1, 65_535).toString()
+        val dest = when (tak.preset) {
+            TakUdpPreset.THIS_PHONE -> LanguageText.text("diag.tak.dest.phone", mapOf("port" to port))
+            TakUdpPreset.LAN_MULTICAST -> LanguageText.text("diag.tak.dest.lan", mapOf("port" to port))
+            TakUdpPreset.CUSTOM -> LanguageText.text("diag.tak.dest.other", mapOf("port" to port))
+        }
+        val feed = if (tak.enabled) {
+            LanguageText.text("diag.on") + " · " + dest
+        } else {
+            LanguageText.text("diag.off")
+        }
+        val loop = when {
+            !tak.open -> LanguageText.text("diag.tak.loopback.closed")
+            tak.pinned -> LanguageText.text("diag.tak.loopback.lo")
+            else -> LanguageText.text(
+                "diag.tak.loopback.failed",
+                mapOf("error" to (tak.bindError?.take(24)?.ifBlank { null } ?: "refused")),
+            )
+        }
+        val opened = when (tak.birth) {
+            null -> LanguageText.text("diag.tak.loopback.closed")
+            TakBirth.NONE -> LanguageText.text("diag.tak.opened.none")
+            TakBirth.CELLULAR -> LanguageText.text("diag.tak.opened.cellular")
+            TakBirth.WIFI -> LanguageText.text("diag.tak.opened.wifi")
+            TakBirth.ETHERNET -> LanguageText.text("diag.tak.opened.ethernet")
+        }
+        val send = when (tak.lastSendOk) {
+            null -> LanguageText.text("diag.tak.send.none")
+            true -> LanguageText.text("diag.tak.send.ok")
+            false -> LanguageText.text("diag.tak.send.fail")
+        }
+        return listOf(
+            LanguageText.text("diag.tak") to feed,
+            LanguageText.text("diag.tak.loopback") to loop,
+            LanguageText.text("diag.tak.opened") to opened,
+            LanguageText.text("diag.tak.send") to send,
+        )
+    }
 
     private fun wifiUsable(radio: ScanRadioFacts): Boolean =
         radio.wifiOn && !radio.wifiWaitingOnOs

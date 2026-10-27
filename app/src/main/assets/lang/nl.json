@@ -1185,6 +1185,23 @@
     "ui.cameras.on.path": "Bekende camera's op het pad",
     "ui.cameras.within": "Binnen ongeveer {meters} m",
     "ui.cameras.facing.count": "{count} naar het pad",
-    "ui.cameras.near.count": "{count} op het pad zonder richting"
+    "ui.cameras.near.count": "{count} op het pad zonder richting",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Deze telefoon, poort {port}",
+    "diag.tak.dest.lan": "LAN-multicast, poort {port}",
+    "diag.tak.dest.other": "Andere host, poort {port}",
+    "diag.tak.loopback": "Loopback-socket",
+    "diag.tak.loopback.closed": "niet open",
+    "diag.tak.loopback.lo": "gebonden aan lo",
+    "diag.tak.loopback.failed": "bind mislukt ({error})",
+    "diag.tak.opened": "Socket geopend bij",
+    "diag.tak.opened.none": "geen netwerk",
+    "diag.tak.opened.cellular": "alleen mobiel",
+    "diag.tak.opened.wifi": "Wi-Fi verbonden",
+    "diag.tak.opened.ethernet": "Ethernet verbonden",
+    "diag.tak.send": "Laatste zending",
+    "diag.tak.send.ok": "gelukt",
+    "diag.tak.send.fail": "zenden mislukt",
+    "diag.tak.send.none": "nog niet verzonden"
   }
 }

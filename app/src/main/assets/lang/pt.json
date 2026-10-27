@@ -1199,6 +1199,23 @@
     "ui.cameras.on.path": "Câmaras conhecidas no caminho",
     "ui.cameras.within": "A cerca de {meters} m",
     "ui.cameras.facing.count": "{count} para o caminho",
-    "ui.cameras.near.count": "{count} no caminho sem direção"
+    "ui.cameras.near.count": "{count} no caminho sem direção",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Este telefone, porta {port}",
+    "diag.tak.dest.lan": "Multicast LAN, porta {port}",
+    "diag.tak.dest.other": "Outro host, porta {port}",
+    "diag.tak.loopback": "Socket loopback",
+    "diag.tak.loopback.closed": "não aberto",
+    "diag.tak.loopback.lo": "ligado a lo",
+    "diag.tak.loopback.failed": "bind falhou ({error})",
+    "diag.tak.opened": "Socket aberto enquanto",
+    "diag.tak.opened.none": "sem rede",
+    "diag.tak.opened.cellular": "só celular",
+    "diag.tak.opened.wifi": "Wi-Fi ligado",
+    "diag.tak.opened.ethernet": "Ethernet ligado",
+    "diag.tak.send": "Último envio",
+    "diag.tak.send.ok": "com sucesso",
+    "diag.tak.send.fail": "envio falhou",
+    "diag.tak.send.none": "ainda sem envio"
   }
 }

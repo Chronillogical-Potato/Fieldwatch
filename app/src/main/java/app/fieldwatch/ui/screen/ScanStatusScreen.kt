@@ -40,6 +40,8 @@ import app.fieldwatch.radio.WifiRadio
 import app.fieldwatch.domain.GnssCalibration
 import app.fieldwatch.domain.ScanPhoneFacts
 import app.fieldwatch.domain.ScanStatus
+import app.fieldwatch.domain.TakDiagFacts
+import app.fieldwatch.domain.TakPublish
 import app.fieldwatch.ui.FieldwatchUi
 import app.fieldwatch.ui.NestedTabInsets
 import app.fieldwatch.ui.NestedTopBar
@@ -70,6 +72,7 @@ fun ScanStatusScreen(
         now = now,
         radiosOnAir = state.wifiNow + state.bleNow,
         gnssRows = gnss.diagRows + GnssCalibration.diagRows(gnssProfile),
+        tak = takDiag(state, app),
     )
     Scaffold(
         contentWindowInsets = NestedTabInsets,
@@ -129,6 +132,21 @@ fun ScanStatusScreen(
             }
         }
     }
+}
+
+internal fun takDiag(state: FieldwatchUi, app: FieldwatchApp): TakDiagFacts {
+    val settings = state.settings
+    val facts = app.tak.loopbackFacts()
+    return TakDiagFacts(
+        enabled = settings.takEnabled && !settings.demoMode,
+        preset = TakPublish.udpPreset(settings.takHost, settings.takPort),
+        port = settings.takPort,
+        open = facts.open,
+        pinned = facts.pinned,
+        bindError = facts.bindError,
+        birth = facts.birth,
+        lastSendOk = facts.lastSendOk,
+    )
 }
 
 internal fun scanPhoneFacts(context: Context, state: FieldwatchUi, now: Long): ScanPhoneFacts {

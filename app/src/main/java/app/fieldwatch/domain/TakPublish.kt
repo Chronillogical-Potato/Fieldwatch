@@ -103,6 +103,26 @@ enum class TakUdpPreset {
     CUSTOM,
 }
 
+/**
+ * What was connected when the same-phone socket was opened.
+ * Wi-Fi and Ethernet count as a LAN. Cellular does not.
+ */
+enum class TakBirth {
+    NONE,
+    CELLULAR,
+    WIFI,
+    ETHERNET,
+}
+
+/** Diagnostics facts for the same-phone socket. No host address. */
+data class TakLoopbackFacts(
+    val open: Boolean = false,
+    val pinned: Boolean = false,
+    val bindError: String? = null,
+    val birth: TakBirth? = null,
+    val lastSendOk: Boolean? = null,
+)
+
 data class TakFeedStatus(
     val at: Long = 0L,
     val sent: Int = 0,

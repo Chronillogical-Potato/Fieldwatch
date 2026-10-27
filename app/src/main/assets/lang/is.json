@@ -1148,6 +1148,23 @@
     "ui.cameras.on.path": "Þekktar myndavélar á leiðinni",
     "ui.cameras.within": "Innan um {meters} m",
     "ui.cameras.facing.count": "{count} að leiðinni",
-    "ui.cameras.near.count": "{count} á leiðinni án stefnu"
+    "ui.cameras.near.count": "{count} á leiðinni án stefnu",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Þessi sími, gátt {port}",
+    "diag.tak.dest.lan": "LAN multicast, gátt {port}",
+    "diag.tak.dest.other": "Annar hýsill, gátt {port}",
+    "diag.tak.loopback": "Loopback-sokkur",
+    "diag.tak.loopback.closed": "ekki opið",
+    "diag.tak.loopback.lo": "bundið við lo",
+    "diag.tak.loopback.failed": "bind mistókst ({error})",
+    "diag.tak.opened": "Sokkur opnaður á meðan",
+    "diag.tak.opened.none": "ekkert net",
+    "diag.tak.opened.cellular": "aðeins farsími",
+    "diag.tak.opened.wifi": "Wi-Fi tengt",
+    "diag.tak.opened.ethernet": "Ethernet tengt",
+    "diag.tak.send": "Síðasta sending",
+    "diag.tak.send.ok": "tókst",
+    "diag.tak.send.fail": "sending mistókst",
+    "diag.tak.send.none": "ekki sent enn"
   }
 }

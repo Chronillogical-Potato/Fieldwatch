@@ -4,6 +4,10 @@ Newest first. This is Fieldwatch (`app.fieldwatch`). Each build below is what Se
 
 Fieldwatch continues the Spectre 1.2.14 field build under a new name, application id, and the MIT License. It does not replace Spectre on a phone.
 
+## 1.1.34 — 27 October 2026
+
+- TAK / CoT to this phone pins the loopback socket to lo before it is bound. A socket opened without Wi-Fi or Ethernet is replaced once either connects, including when cellular was already up. A socket opened on that LAN keeps sending after the LAN drops. Diagnostics lists whether TAK is on, the destination kind and port, whether the loopback socket is bound to lo, what was connected when it opened, and whether the last send succeeded. The host address stays off that page.
+
 ## 1.1.33 — 27 October 2026
 
 - TAK / CoT to this phone still reaches ATAK when Fieldwatch starts with no Wi-Fi joined. A socket opened with no network is replaced once a network is there. A socket that already worked keeps sending after Wi-Fi drops.

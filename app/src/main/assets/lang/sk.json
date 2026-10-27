@@ -1203,6 +1203,23 @@
     "ui.cameras.on.path": "Známe kamery na trase",
     "ui.cameras.within": "Asi do {meters} m",
     "ui.cameras.facing.count": "{count} smerom k trase",
-    "ui.cameras.near.count": "{count} na trase bez smeru"
+    "ui.cameras.near.count": "{count} na trase bez smeru",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Tento telefón, port {port}",
+    "diag.tak.dest.lan": "LAN multicast, port {port}",
+    "diag.tak.dest.other": "Iný hostiteľ, port {port}",
+    "diag.tak.loopback": "Loopback socket",
+    "diag.tak.loopback.closed": "nie je otvorený",
+    "diag.tak.loopback.lo": "viazaný na lo",
+    "diag.tak.loopback.failed": "bind zlyhal ({error})",
+    "diag.tak.opened": "Socket otvorený pri",
+    "diag.tak.opened.none": "žiadna sieť",
+    "diag.tak.opened.cellular": "len mobil",
+    "diag.tak.opened.wifi": "Wi-Fi pripojené",
+    "diag.tak.opened.ethernet": "Ethernet pripojený",
+    "diag.tak.send": "Posledné odoslanie",
+    "diag.tak.send.ok": "podarilo sa",
+    "diag.tak.send.fail": "odoslanie zlyhalo",
+    "diag.tak.send.none": "zatiaľ nič"
   }
 }

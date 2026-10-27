@@ -1194,6 +1194,23 @@
     "ui.cameras.on.path": "Kjente kameraer på sporet",
     "ui.cameras.within": "Innen omtrent {meters} m",
     "ui.cameras.facing.count": "{count} mot sporet",
-    "ui.cameras.near.count": "{count} på sporet uten retning"
+    "ui.cameras.near.count": "{count} på sporet uten retning",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Denne telefonen, port {port}",
+    "diag.tak.dest.lan": "LAN-multicast, port {port}",
+    "diag.tak.dest.other": "Annen vert, port {port}",
+    "diag.tak.loopback": "Loopback-socket",
+    "diag.tak.loopback.closed": "ikke åpen",
+    "diag.tak.loopback.lo": "bundet til lo",
+    "diag.tak.loopback.failed": "bind mislyktes ({error})",
+    "diag.tak.opened": "Socket åpnet mens",
+    "diag.tak.opened.none": "ingen nett",
+    "diag.tak.opened.cellular": "bare mobil",
+    "diag.tak.opened.wifi": "Wi-Fi tilkoblet",
+    "diag.tak.opened.ethernet": "Ethernet tilkoblet",
+    "diag.tak.send": "Siste sending",
+    "diag.tak.send.ok": "lyktes",
+    "diag.tak.send.fail": "sending feilet",
+    "diag.tak.send.none": "ikke sendt ennå"
   }
 }

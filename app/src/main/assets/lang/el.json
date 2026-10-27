@@ -1201,6 +1201,23 @@
     "ui.cameras.on.path": "Γνωστές κάμερες στη διαδρομή",
     "ui.cameras.within": "Περίπου {meters} m",
     "ui.cameras.facing.count": "{count} προς τη διαδρομή",
-    "ui.cameras.near.count": "{count} στη διαδρομή χωρίς κατεύθυνση"
+    "ui.cameras.near.count": "{count} στη διαδρομή χωρίς κατεύθυνση",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Αυτό το τηλέφωνο, θύρα {port}",
+    "diag.tak.dest.lan": "LAN multicast, θύρα {port}",
+    "diag.tak.dest.other": "Άλλος κόμβος, θύρα {port}",
+    "diag.tak.loopback": "Socket loopback",
+    "diag.tak.loopback.closed": "κλειστό",
+    "diag.tak.loopback.lo": "δεμένο στο lo",
+    "diag.tak.loopback.failed": "αποτυχία bind ({error})",
+    "diag.tak.opened": "Socket ανοιχτό ενώ",
+    "diag.tak.opened.none": "χωρίς δίκτυο",
+    "diag.tak.opened.cellular": "μόνο κινητό",
+    "diag.tak.opened.wifi": "Wi-Fi συνδεδεμένο",
+    "diag.tak.opened.ethernet": "Ethernet συνδεδεμένο",
+    "diag.tak.send": "Τελευταία αποστολή",
+    "diag.tak.send.ok": "πέτυχε",
+    "diag.tak.send.fail": "αποστολή απέτυχε",
+    "diag.tak.send.none": "ακόμα τίποτα"
   }
 }

@@ -1147,6 +1147,23 @@
     "ui.cameras.on.path": "Žinomos kameros kelyje",
     "ui.cameras.within": "Maždaug {meters} m",
     "ui.cameras.facing.count": "{count} į kelią",
-    "ui.cameras.near.count": "{count} ant kelio be krypties"
+    "ui.cameras.near.count": "{count} ant kelio be krypties",
+    "diag.tak": "TAK / CoT",
+    "diag.tak.dest.phone": "Šis telefonas, prievadas {port}",
+    "diag.tak.dest.lan": "LAN multicast, prievadas {port}",
+    "diag.tak.dest.other": "Kitas mazgas, prievadas {port}",
+    "diag.tak.loopback": "Loopback lizdas",
+    "diag.tak.loopback.closed": "neatidaryta",
+    "diag.tak.loopback.lo": "pririšta prie lo",
+    "diag.tak.loopback.failed": "bind nepavyko ({error})",
+    "diag.tak.opened": "Lizdas atidarytas, kai",
+    "diag.tak.opened.none": "nėra tinklo",
+    "diag.tak.opened.cellular": "tik mobilusis",
+    "diag.tak.opened.wifi": "Wi-Fi prijungta",
+    "diag.tak.opened.ethernet": "Ethernet prijungtas",
+    "diag.tak.send": "Pask. siuntimas",
+    "diag.tak.send.ok": "pavyko",
+    "diag.tak.send.fail": "siuntimas nepavyko",
+    "diag.tak.send.none": "dar nėra"
   }
 }
