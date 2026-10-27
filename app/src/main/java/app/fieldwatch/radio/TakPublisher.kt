@@ -1,5 +1,10 @@
 package app.fieldwatch.radio
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.ParcelFileDescriptor
+import android.system.OsConstants
 import android.util.Log
 import app.fieldwatch.domain.AppSettings
 import app.fieldwatch.domain.CotEvent
@@ -19,9 +24,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import app.fieldwatch.domain.TakInstall
+import java.io.FileDescriptor
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.MulticastSocket
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
@@ -29,9 +36,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Sends Cursor-on-Target UDP to ATAK SA multicast or a unicast host:port.
  * Same-phone ATAK often ignores multicast loopback, so unicast also hits
- * 127.0.0.1 on the same port. Privacy mode skips the feed.
+ * 127.0.0.1 on the same port. That loopback socket is bound to lo, so This
+ * phone still reaches ATAK when no Wi-Fi is joined. A unicast or multicast
+ * socket opened with no network is replaced once a network exists. A socket
+ * opened on a network is kept after that network drops. Privacy mode skips the feed.
  */
-class TakPublisher {
+class TakPublisher(context: Context? = null) {
+    private val appContext = context?.applicationContext
     private val last = ConcurrentHashMap<String, TakSent>()
     /** Radios that left the feed and were resent once with the spot hold. */
     private val parked = ConcurrentHashMap<String, TakSent>()
@@ -42,6 +53,13 @@ class TakPublisher {
     private val gate = Any()
     @Volatile private var multicast: MulticastSocket? = null
     @Volatile private var unicast: DatagramSocket? = null
+    @Volatile private var loopback: DatagramSocket? = null
+    /** True when that socket was opened while the phone had no network. */
+    private var multicastOffline = false
+    private var unicastOffline = false
+    private var loopbackOffline = false
+    /** True when the loopback socket is bound to lo. */
+    private var loopbackOnLo = false
     private val _status = MutableStateFlow(TakFeedStatus())
     val status: StateFlow<TakFeedStatus> = _status.asStateFlow()
 
@@ -432,8 +450,14 @@ class TakPublisher {
         synchronized(gate) {
             runCatching { multicast?.close() }
             runCatching { unicast?.close() }
+            runCatching { loopback?.close() }
             multicast = null
             unicast = null
+            loopback = null
+            multicastOffline = false
+            unicastOffline = false
+            loopbackOffline = false
+            loopbackOnLo = false
         }
         last.clear()
         parked.clear()
@@ -490,12 +514,14 @@ class TakPublisher {
         return synchronized(gate) {
             runCatching {
                 val packet = DatagramPacket(bytes, bytes.size, addr, port)
-                if (addr.isMulticastAddress) {
-                    val sock = multicastSock()
-                    runCatching { sock.timeToLive = 1 }
-                    sock.send(packet)
-                } else {
-                    unicastSock().send(packet)
+                when {
+                    addr.isMulticastAddress -> {
+                        val sock = multicastSock()
+                        runCatching { sock.timeToLive = 1 }
+                        sock.send(packet)
+                    }
+                    addr.isLoopbackAddress -> loopbackSock().send(packet)
+                    else -> unicastSock().send(packet)
                 }
                 true
             }.onFailure { err ->
@@ -505,26 +531,103 @@ class TakPublisher {
     }
 
     private fun multicastSock(): MulticastSocket = synchronized(gate) {
+        val online = networkUp()
         val open = multicast
-        if (open != null && !open.isClosed) return open
+        if (open != null && !open.isClosed && !replaceTakSocket(multicastOffline, online)) {
+            return open
+        }
+        if (open != null) runCatching { open.close() }
         MulticastSocket().also {
             it.reuseAddress = true
             runCatching { it.timeToLive = 1 }
             multicast = it
+            multicastOffline = !online
         }
     }
 
     private fun unicastSock(): DatagramSocket = synchronized(gate) {
+        val online = networkUp()
         val open = unicast
-        if (open != null && !open.isClosed) return open
+        if (open != null && !open.isClosed && !replaceTakSocket(unicastOffline, online)) {
+            return open
+        }
+        if (open != null) runCatching { open.close() }
         DatagramSocket().also {
             it.reuseAddress = true
             unicast = it
+            unicastOffline = !online
         }
+    }
+
+    /**
+     * 127.0.0.1. Bound to lo so Android does not drop it when no network is up.
+     * If that bind fails, a socket opened offline is replaced once a network exists.
+     */
+    private fun loopbackSock(): DatagramSocket = synchronized(gate) {
+        val online = networkUp()
+        val open = loopback
+        val replace = !loopbackOnLo && replaceTakSocket(loopbackOffline, online)
+        if (open != null && !open.isClosed && !replace) return open
+        if (open != null) runCatching { open.close() }
+        val sock = DatagramSocket(null)
+        sock.reuseAddress = true
+        sock.bind(InetSocketAddress(InetAddress.getByAddress(LOOPBACK_V4), 0))
+        loopbackOnLo = bindLoopback(sock)
+        loopback = sock
+        loopbackOffline = !online
+        if (loopbackOnLo) {
+            Log.i(TAG, "TAK loopback socket bound to lo")
+        }
+        sock
+    }
+
+    /**
+     * SetsockoptIfreq is hidden. Bind to lo anyway so 127.0.0.1 is not dropped
+     * when the phone has no network. A failure falls back to replacing this
+     * socket once a network exists.
+     */
+    private fun bindLoopback(sock: DatagramSocket): Boolean {
+        val held = ParcelFileDescriptor.fromDatagramSocket(sock)
+        return try {
+            val method = Class.forName("android.system.Os").getMethod(
+                "setsockoptIfreq",
+                FileDescriptor::class.java,
+                Int::class.javaPrimitiveType,
+                Int::class.javaPrimitiveType,
+                String::class.java,
+            )
+            method.invoke(
+                null,
+                held.fileDescriptor,
+                OsConstants.SOL_SOCKET,
+                OsConstants.SO_BINDTODEVICE,
+                LOOPBACK_IF,
+            )
+            true
+        } catch (err: Throwable) {
+            Log.w(TAG, "TAK loopback device bind failed: $err")
+            false
+        } finally {
+            runCatching { held.close() }
+        }
+    }
+
+    private fun networkUp(): Boolean {
+        val context = appContext ?: return false
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
     }
 
     companion object {
         private const val TAG = "FieldwatchTak"
+        private const val LOOPBACK_IF = "lo"
+        private val LOOPBACK_V4 = byteArrayOf(127, 0, 0, 1)
         private fun PayloadOk(fix: Pair<Double, Double>): Boolean =
             app.fieldwatch.domain.PayloadLocation.validCoord(fix.first, fix.second)
     }

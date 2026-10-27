@@ -563,7 +563,7 @@ class FieldwatchApp : Application() {
         sits = SitStore(this, scope)
         places = PlaceStore(File(filesDir, "place-memory.json"))
         alerter = Alerter(this)
-        tak = TakPublisher()
+        tak = TakPublisher(this)
         gnssProfile = GnssProfileStore(this)
         gnssRaw = GnssRawFiles(File(filesDir, "gnss-raw"))
         gnss = GnssMonitor(this)
