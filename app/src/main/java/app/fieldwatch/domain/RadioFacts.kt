@@ -124,3 +124,12 @@ private fun serviceDataMergeKey(rec: ServiceDataRecord): String {
 fun ByteArray.toHexUpper(): String = joinToString("") { "%02X".format(it) }
 
 fun String.hexSpaced(): String = chunked(2).joinToString(" ")
+
+/**
+ * Privacy mode shows this instead of raw advertisement hex.
+ * A coordinate uses the same word. The byte count stays when the row label does not already have it.
+ */
+fun maskedRawBytes(hex: String, withByteCount: Boolean): String {
+    if (!withByteCount) return "masked"
+    return "${hex.length / 2} bytes, masked"
+}

@@ -41,7 +41,8 @@ import kotlin.math.tan
  * Optional raster under Reports → Path, Show live path, and the letter path figure.
  * Same switch as Online place names and maps. Privacy mode does not hide tiles.
  * Saved pictures stay in the app's files until cleared or until they pass [MAX_CACHE_BYTES].
- * Never throws; offline or a failed fetch returns an empty list (plain trace).
+ * With no connection, a saved picture is still drawn. A missing picture is left blank, and nothing is downloaded.
+ * Never throws. A failed fetch leaves that spot as a plain trace.
  */
 object PathTiles {
     data class Tile(
@@ -75,7 +76,6 @@ object PathTiles {
         try {
             if (!onlineLookup) return@withContext Batch()
             if (samples.isEmpty()) return@withContext Batch()
-            if (!PlaceLookup.online(context)) return@withContext Batch()
             val expanded = expandToPlot(
                 samples.minOf { it.lat },
                 samples.maxOf { it.lat },
@@ -92,6 +92,7 @@ object PathTiles {
                 basemap,
                 mapKey,
                 overlays,
+                allowNetwork = PlaceLookup.online(context),
             )
         } catch (e: CancellationException) {
             throw e
@@ -119,7 +120,6 @@ object PathTiles {
     ): Batch = withContext(Dispatchers.IO) {
         try {
             if (!onlineLookup) return@withContext Batch()
-            if (!PlaceLookup.online(context)) return@withContext Batch()
             loadBox(
                 context,
                 south,
@@ -130,6 +130,7 @@ object PathTiles {
                 mapKey = mapKey,
                 overlays = overlays,
                 onTile = onTile,
+                allowNetwork = PlaceLookup.online(context),
             )
         } catch (e: CancellationException) {
             throw e
@@ -260,6 +261,7 @@ object PathTiles {
         mapKey: String? = null,
         overlays: Set<MapOverlay> = emptySet(),
         onTile: (suspend (Tile) -> Unit)? = null,
+        allowNetwork: Boolean = true,
     ): Batch {
         val blocked = blockedKey(basemap, mapKey)
         if (blocked != null) return Batch(problem = blocked)
@@ -277,7 +279,7 @@ object PathTiles {
                 async(Dispatchers.IO) {
                     val one = gate.withPermit {
                         ensureActive()
-                        oneTile(context, basemap, mapKey, plan.z, x, y, active)
+                        oneTile(context, basemap, mapKey, plan.z, x, y, active, allowNetwork)
                     }
                     ensureActive()
                     if (one is Built.Ready) onTile?.invoke(one.tile)
@@ -320,8 +322,9 @@ object PathTiles {
         x: Int,
         y: Int,
         active: List<MapOverlay>,
+        allowNetwork: Boolean,
     ): Built {
-        return when (val fetch = tileBitmap(context, basemap.cacheName, basemap, z, x, y, mapKey)) {
+        return when (val fetch = tileBitmap(context, basemap.cacheName, basemap, z, x, y, mapKey, allowNetwork)) {
             is Fetch.Picture -> {
                 val layers = ArrayList<Pair<Bitmap, MapOverlay>>(active.size)
                 for (overlay in active) {
@@ -336,6 +339,7 @@ object PathTiles {
                         source.x,
                         source.y,
                         null,
+                        allowNetwork,
                     )
                     if (over is Fetch.Picture) {
                         layers += cropOverlay(over.bitmap, source) to overlay
@@ -579,6 +583,7 @@ object PathTiles {
         x: Int,
         y: Int,
         mapKey: String?,
+        allowNetwork: Boolean = true,
     ): Fetch {
         val file = tileFile(context, cacheName, z, x, y)
         if (file.isFile && file.length() > 64) {
@@ -586,6 +591,7 @@ object PathTiles {
             if (cached != null) return Fetch.Picture(cached)
             file.delete()
         }
+        if (!allowNetwork) return Fetch.Failed
         val address = MapTileUrl.build(basemap, z, x, y, mapKey) ?: return Fetch.Failed
         val token = if (basemap.needsKey) MapKey.accept(mapKey).orEmpty() else ""
         return fetchTile(address, token, basemap, file, hopsLeft = 2)

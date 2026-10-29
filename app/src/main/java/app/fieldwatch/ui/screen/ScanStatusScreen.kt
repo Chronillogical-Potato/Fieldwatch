@@ -142,8 +142,6 @@ internal fun takDiag(state: FieldwatchUi, app: FieldwatchApp): TakDiagFacts {
         preset = TakPublish.udpPreset(settings.takHost, settings.takPort),
         port = settings.takPort,
         open = facts.open,
-        pinned = facts.pinned,
-        bindError = facts.bindError,
         birth = facts.birth,
         lastSendOk = facts.lastSendOk,
     )

@@ -240,12 +240,12 @@ class ScanStatusTest {
                 "Wi-Fi", "Last Wi-Fi scan", "Bluetooth", "BLE", "BLE results last minute",
                 "Faster Wi-Fi AP scans", "Allow background usage", "Unrestricted battery",
                 "Location", "Location permission", "GPS fix", "Filters",
-                "TAK / CoT", "Loopback socket", "Socket opened while", "Last send",
+                "TAK / CoT", "Same phone", "Socket opened while", "Last send",
             ),
             labels,
         )
         assertEquals("off", report.rows.first { it.first == "TAK / CoT" }.second)
-        assertEquals("not open", report.rows.first { it.first == "Loopback socket" }.second)
+        assertEquals("not open", report.rows.first { it.first == "Same phone" }.second)
         assertEquals("not open", report.rows.first { it.first == "Socket opened while" }.second)
         assertEquals("no send yet", report.rows.first { it.first == "Last send" }.second)
         assertEquals("samsung SM-A546U1", report.rows.first { it.first == "Phone" }.second)
@@ -264,14 +264,12 @@ class ScanStatusTest {
                 preset = TakUdpPreset.CUSTOM,
                 port = 10011,
                 open = true,
-                pinned = false,
-                bindError = "NoSuchMethodException",
                 birth = TakBirth.CELLULAR,
                 lastSendOk = false,
             ),
         )
         assertEquals("on · Other host, port 10011", report.rows.first { it.first == "TAK / CoT" }.second)
-        assertEquals("bind failed (NoSuchMethodException)", report.rows.first { it.first == "Loopback socket" }.second)
+        assertEquals("needs Wi-Fi", report.rows.first { it.first == "Same phone" }.second)
         assertEquals("cellular only", report.rows.first { it.first == "Socket opened while" }.second)
         assertEquals("send failed", report.rows.first { it.first == "Last send" }.second)
         assertFalse(report.text.contains(hidden))
@@ -284,13 +282,12 @@ class ScanStatusTest {
                 preset = TakUdpPreset.THIS_PHONE,
                 port = 10011,
                 open = true,
-                pinned = true,
                 birth = TakBirth.WIFI,
                 lastSendOk = true,
             ),
         )
         assertEquals("on · This phone, port 10011", phone.rows.first { it.first == "TAK / CoT" }.second)
-        assertEquals("bound to lo", phone.rows.first { it.first == "Loopback socket" }.second)
+        assertEquals("reaches ATAK", phone.rows.first { it.first == "Same phone" }.second)
         assertEquals("Wi-Fi connected", phone.rows.first { it.first == "Socket opened while" }.second)
         assertEquals("succeeded", phone.rows.first { it.first == "Last send" }.second)
         assertFalse(phone.text.contains(hidden))

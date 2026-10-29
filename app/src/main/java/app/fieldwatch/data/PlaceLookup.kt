@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import app.fieldwatch.domain.DebriefPlaces
 import app.fieldwatch.domain.GpsSample
+import app.fieldwatch.domain.LanguageText
 import app.fieldwatch.domain.Sighting
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -96,20 +97,26 @@ object PlaceLookup {
             return DebriefPlaces(
                 attempted = true,
                 available = true,
-                note = "Online lookup on, but this sit had no GPS stamps to name.",
+                note = LanguageText.text("report.place.lookup.none"),
             )
         }
         val geocoder = Geocoder(context, Locale.getDefault())
         val cache = LinkedHashMap<String, String>()
         val lines = ArrayList<String>(fixes.size)
         for ((i, fix) in fixes.withIndex()) {
-            onProgress?.invoke("Looking up place names (${i + 1} of ${fixes.size})…")
+            onProgress?.invoke(
+                LanguageText.text(
+                    "report.place.progress",
+                    mapOf("i" to "${i + 1}", "n" to "${fixes.size}"),
+                ),
+            )
             val key = app.fieldwatch.domain.Geo.cellKey(fix.lat, fix.lon)
             val name = cache[key] ?: reverse(geocoder, fix.lat, fix.lon)?.also { cache[key] = it }
             if (!fix.namedOnly) {
                 val coord = "%.5f, %.5f".format(Locale.US, fix.lat, fix.lon)
+                val none = LanguageText.text("report.place.noname")
                 lines += if (name.isNullOrBlank()) {
-                    "  · ${fix.label}  $coord  (no name returned)"
+                    "  · ${fix.label}  $coord  $none"
                 } else {
                     "  · ${fix.label}  $name  ($coord)"
                 }
@@ -120,9 +127,9 @@ object PlaceLookup {
             attempted = true,
             available = named > 0,
             note = if (named > 0) {
-                "Online lookup: system geocoder named $named distinct GPS cell(s). Street names are from the phone’s network geocoder, not a Fieldwatch cloud. Approximate."
+                LanguageText.text("report.place.lookup.named", mapOf("n" to "$named"))
             } else {
-                "Online lookup ran, but the system geocoder returned no street names. Coordinates only."
+                LanguageText.text("report.place.lookup.empty")
             },
             lines = lines,
             namesByCell = cache.toMap(),
@@ -143,15 +150,15 @@ object PlaceLookup {
         legs.forEach { leg ->
             if (leg.stay) {
                 stayN++
-                add("Stay $stayN", leg.lat, leg.lon)
+                add(LanguageText.text("report.place.stay", mapOf("n" to "$stayN")), leg.lat, leg.lon)
             } else {
-                add("Transit from", leg.lat, leg.lon)
-                add("Transit to", leg.endLat, leg.endLon)
+                add(LanguageText.text("report.place.from"), leg.lat, leg.lon)
+                add(LanguageText.text("report.place.to"), leg.endLat, leg.endLon)
             }
         }
         if (out.isEmpty() && path.isNotEmpty()) {
-            add("Path start", path.first().lat, path.first().lon)
-            if (path.size > 1) add("Path end", path.last().lat, path.last().lon)
+            add(LanguageText.text("report.place.start"), path.first().lat, path.first().lon)
+            if (path.size > 1) add(LanguageText.text("report.place.end"), path.last().lat, path.last().lon)
         }
         if (out.size < 8) {
             devices.filter { it.gpsTrail.isNotEmpty() && it.rssi >= -70 }

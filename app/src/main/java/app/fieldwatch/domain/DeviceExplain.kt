@@ -9,6 +9,8 @@ object DeviceExplain {
         val headline: String,
         val because: String,
         val confidence: Confidence,
+        val generic: Boolean = false,
+        val bare: String = "",
     )
 
     enum class Confidence { HIGH, MEDIUM, LOW }
@@ -26,15 +28,17 @@ object DeviceExplain {
         if (device.kind == RadioKind.WIFI) hints += wifiHints(device, signatureNames)
 
         if (hints.isEmpty()) {
+            val bare = if (device.kind == RadioKind.WIFI) {
+                tx("ui.wi.fi.access.point.2")
+            } else {
+                tx("explain.ble.adv")
+            }
             return Guess(
-                headline = if (device.kind == RadioKind.WIFI) {
-                    "Wi-Fi access point"
-                } else {
-                    "Bluetooth LE advertiser"
-                },
-                because = "It is on the air, but it did not advertise a product class " +
-                    "(no Appearance, Class of Device, or well-known service that names a type).",
+                headline = bare,
+                because = tx("explain.no.class"),
                 confidence = Confidence.LOW,
+                generic = true,
+                bare = bare,
             )
         }
         val grouped = LinkedHashMap<String, Hint>()
@@ -54,15 +58,16 @@ object DeviceExplain {
             else -> Confidence.LOW
         }
         val hedge = when (confidence) {
-            Confidence.HIGH -> "Most likely"
-            Confidence.MEDIUM -> "Probably"
-            Confidence.LOW -> "Could be"
+            Confidence.HIGH -> "explain.likely"
+            Confidence.MEDIUM -> "explain.probably"
+            Confidence.LOW -> "explain.could"
         }
         return Guess(
-            headline = "$hedge ${best.label}",
-            because = support.joinToString(" ") +
-                " This is what the device is advertising, not a visual ID.",
+            headline = tx(hedge, mapOf("what" to best.label)),
+            because = support.joinToString(" ") + " " + tx("explain.advertised"),
             confidence = confidence,
+            generic = best.generic,
+            bare = best.label,
         )
     }
 
@@ -72,9 +77,7 @@ object DeviceExplain {
      */
     fun listLabel(device: Sighting, signatureNames: List<String> = emptyList()): String? {
         val guess = guess(device, signatureNames)
-        val generic = guess.headline.contains("Bluetooth LE advertiser", ignoreCase = true) ||
-            guess.headline.contains("Wi-Fi access point", ignoreCase = true)
-        val core = if (generic) null else tidyHeadline(guess.headline)
+        val core = if (guess.generic) null else tidyHeadline(guess.bare.ifBlank { guess.headline })
         val vendor = device.vendor?.trim()?.takeIf { it.isNotBlank() && it.length <= 24 }
         if (core != null) {
             return if (vendor != null && !core.contains(vendor, ignoreCase = true)) {
@@ -83,7 +86,7 @@ object DeviceExplain {
                 core
             }
         }
-        if (vendor != null) return "$vendor device"
+        if (vendor != null) return tx("explain.vendor.device", mapOf("vendor" to vendor))
         return null
     }
 
@@ -101,25 +104,25 @@ object DeviceExplain {
 
     fun flagsExplain(flags: Int): String = buildList {
         if (flags and 0x01 != 0) {
-            add("Limited-discoverable: briefly looking for a nearby connection.")
+            add(tx("explain.flag.limited"))
         }
         if (flags and 0x02 != 0) {
-            add("Discoverable: other BLE devices can find it.")
+            add(tx("explain.flag.discoverable"))
         }
         if (flags and 0x04 != 0) {
-            add("BLE-only: no classic Bluetooth (headsets/file-send radio).")
+            add(tx("explain.flag.ble.only"))
         } else {
-            add("May also do classic Bluetooth (BR/EDR) as well as BLE.")
+            add(tx("explain.flag.classic"))
         }
         if (flags and 0x08 != 0 || flags and 0x10 != 0) {
-            add("Dual-mode chip: BLE and classic can run together.")
+            add(tx("explain.flag.dual"))
         }
     }.joinToString(" ")
 
     fun phyExplain(label: String): String = when {
-        label.contains("Coded") -> "$label — long-range BLE (slower, farther)"
-        label.contains("2M") -> "$label — faster BLE (Bluetooth 5)"
-        label.contains("1M") -> "$label — standard BLE radio"
+        label.contains("Coded") -> tx("explain.phy.coded", mapOf("label" to label))
+        label.contains("2M") -> tx("explain.phy.2m", mapOf("label" to label))
+        label.contains("1M") -> tx("explain.phy.1m", mapOf("label" to label))
         else -> label
     }
 
@@ -127,17 +130,17 @@ object DeviceExplain {
         val type = device.facts.addressType
         return when {
             device.kind == RadioKind.WIFI && device.randomized ->
-                "Locally administered BSSID. Vehicle, mesh, and guest APs often keep this address. Not a rotating phone MAC."
+                tx("explain.addr.bssid")
             MacUtil.isLocallyAdministered(device.mac) && !device.randomized ->
-                "Locally administered address. The local bit is set, so this is not an IEEE factory assignment."
+                tx("explain.addr.local")
             type.equals("Public", true) && !device.randomized ->
-                "Public factory address (stable, IEEE-assigned)."
+                tx("explain.addr.public")
             type.equals("Random", true) || device.randomized ->
-                "Random / privacy address. The MAC can change, so this is not a lasting identity."
+                tx("explain.addr.random")
             type.equals("Anonymous", true) ->
-                "Anonymous: the stack hid the address."
+                tx("explain.addr.anon")
             else ->
-                listOfNotNull(type, "Universal IEEE address (stable OUI).").joinToString(" · ")
+                listOfNotNull(type, tx("explain.addr.universal")).joinToString(" · ")
         }
     }
 
@@ -158,22 +161,22 @@ object DeviceExplain {
         val bits = ArrayList<String>(4)
         val u = raw.uppercase()
         when {
-            "SAE" in u || "WPA3" in u -> bits += "WPA3 password (SAE handshake)"
-            "OWE" in u -> bits += "Enhanced Open (encrypted, no password)"
-            "PSK" in u && "WPA2" in u -> bits += "WPA2 password (PSK)"
-            "PSK" in u || "WPA" in u -> bits += "Wi-Fi password (WPA/PSK)"
-            "802.1X" in u || "EAP" in u -> bits += "Enterprise login (802.1X)"
-            "WEP" in u -> bits += "WEP (old, weak)"
-            "ESS" in u && bits.isEmpty() -> bits += "Open or encryption not parsed"
+            "SAE" in u || "WPA3" in u -> bits += tx("explain.sec.wpa3")
+            "OWE" in u -> bits += tx("explain.sec.owe")
+            "PSK" in u && "WPA2" in u -> bits += tx("explain.sec.wpa2")
+            "PSK" in u || "WPA" in u -> bits += tx("explain.sec.wpa")
+            "802.1X" in u || "EAP" in u -> bits += tx("explain.sec.enterprise")
+            "WEP" in u -> bits += tx("explain.sec.wep")
+            "ESS" in u && bits.isEmpty() -> bits += tx("explain.sec.open")
         }
         when {
-            "CCMP" in u || "GCMP" in u -> bits += "AES encryption"
-            "TKIP" in u -> bits += "TKIP (older, weaker cipher)"
+            "CCMP" in u || "GCMP" in u -> bits += tx("explain.sec.aes")
+            "TKIP" in u -> bits += tx("explain.sec.tkip")
         }
-        if ("WPS" in u) bits += "WPS setup is enabled"
-        if ("MESH" in u) bits += "mesh node"
-        if ("IBSS" in u) bits += "ad-hoc network"
-        if ("ESS" in u) bits += "infrastructure access point"
+        if ("WPS" in u) bits += tx("explain.sec.wps")
+        if ("MESH" in u) bits += tx("explain.sec.mesh")
+        if ("IBSS" in u) bits += tx("explain.sec.ibss")
+        if ("ESS" in u) bits += tx("explain.sec.ess")
         return if (bits.isEmpty()) raw else bits.distinct().joinToString(". ") + "."
     }
 
@@ -181,31 +184,31 @@ object DeviceExplain {
         val name = RadioDb.serviceUuid(uuid)
         val short = uuid16(uuid) ?: return name
         val extra = when (short) {
-            0x1800 -> "connection basics"
-            0x1801 -> "attribute protocol"
-            0x180A -> "model / serial / firmware"
-            0x180F -> "battery level"
-            0x1812 -> "keyboard, mouse, or gamepad"
-            0x180D -> "heart-rate sensor"
-            0x1810 -> "blood-pressure sensor"
-            0x181A -> "temperature / humidity style sensor"
-            0x1844, 0x1845, 0x1846 -> "LE cycling power/speed"
-            0x1850, 0x184E, 0x184F -> "LE Audio"
-            0xFE2C -> "Google Fast Pair (often buds/speakers)"
-            0xFD5A -> "Samsung SmartTag"
-            0xFD44 -> "Apple Find My related"
-            0xFEED, 0xFEDD, 0xFEEC -> "Tile tracker"
-            0xFEEE -> "Polar heart-rate strap or watch"
-            0xFE33 -> "Chipolo item finder"
-            0xFD50 -> "Tuya IoT"
-            0xFEBE, 0xFE21 -> "Bose"
-            0xFE78 -> "HP printer"
-            0xFE07 -> "Sonos speaker"
-            0xFEAF, 0xFEB0 -> "Nest Weave"
-            0xFCBF -> "ASSA ABLOY Opening Solutions"
-            0xFE24 -> "August Home lock"
-            0xFCF4 -> "Allegion / Schlage"
-            0xFCB2 -> "Apple (not ASSA ABLOY)"
+            0x1800 -> tx("explain.uuid.1800")
+            0x1801 -> tx("explain.uuid.1801")
+            0x180A -> tx("explain.uuid.180a")
+            0x180F -> tx("explain.uuid.180f")
+            0x1812 -> tx("explain.uuid.1812")
+            0x180D -> tx("explain.uuid.180d")
+            0x1810 -> tx("explain.uuid.1810")
+            0x181A -> tx("explain.uuid.181a")
+            0x1844, 0x1845, 0x1846 -> tx("explain.uuid.cycle")
+            0x1850, 0x184E, 0x184F -> tx("explain.uuid.le.audio")
+            0xFE2C -> tx("explain.uuid.fastpair")
+            0xFD5A -> tx("explain.uuid.smarttag")
+            0xFD44 -> tx("explain.uuid.findmy")
+            0xFEED, 0xFEDD, 0xFEEC -> tx("explain.uuid.tile")
+            0xFEEE -> tx("explain.uuid.polar")
+            0xFE33 -> tx("explain.uuid.chipolo")
+            0xFD50 -> tx("explain.uuid.tuya")
+            0xFEBE, 0xFE21 -> tx("explain.uuid.bose")
+            0xFE78 -> tx("explain.uuid.hp")
+            0xFE07 -> tx("explain.uuid.sonos")
+            0xFEAF, 0xFEB0 -> tx("explain.uuid.nest")
+            0xFCBF -> tx("explain.uuid.assa")
+            0xFE24 -> tx("explain.uuid.august")
+            0xFCF4 -> tx("explain.uuid.allegion")
+            0xFCB2 -> tx("explain.uuid.apple")
             else -> null
         }
         return when {
@@ -221,6 +224,7 @@ object DeviceExplain {
         val label: String,
         val reason: String,
         val weight: Int,
+        val generic: Boolean = false,
     )
 
     private fun appearanceHint(name: String?): Hint? {
@@ -228,28 +232,28 @@ object DeviceExplain {
         val n = name.lowercase()
         val (bucket, label, w) = when {
             "ear" in n || "headphone" in n || "headset" in n || "hearable" in n || "hearing" in n ->
-                Triple("audio-personal", "earbuds or headphones", 7)
+                Triple("audio-personal", tx("explain.earbuds"), 7)
             "speaker" in n || "loudspeaker" in n || "hifi" in n ->
-                Triple("audio-speaker", "a speaker", 7)
-            "mouse" in n -> Triple("mouse", "a mouse", 8)
-            "keyboard" in n -> Triple("keyboard", "a keyboard", 8)
-            "gamepad" in n || "joystick" in n -> Triple("gamepad", "a game controller", 7)
-            "watch" in n -> Triple("watch", "a watch or wrist wearable", 7)
-            "phone" in n -> Triple("phone", "a phone", 6)
+                Triple("audio-speaker", tx("explain.speaker"), 7)
+            "mouse" in n -> Triple("mouse", tx("explain.mouse"), 8)
+            "keyboard" in n -> Triple("keyboard", tx("explain.keyboard"), 8)
+            "gamepad" in n || "joystick" in n -> Triple("gamepad", tx("explain.gamepad"), 7)
+            "watch" in n -> Triple("watch", tx("explain.watch"), 7)
+            "phone" in n -> Triple("phone", tx("explain.phone"), 6)
             "laptop" in n || "computer" in n || "desktop" in n || "tablet" in n ->
-                Triple("computer", "a computer or tablet", 6)
-            "tag" in n || "keyring" in n -> Triple("tag", "a finder tag / tracker", 6)
-            "remote" in n -> Triple("remote", "a remote control", 6)
-            "hid" in n -> Triple("hid", "an input device (keyboard, mouse, or similar)", 4)
-            "heart" in n -> Triple("health", "a heart-rate monitor", 7)
+                Triple("computer", tx("explain.computer.tablet"), 6)
+            "tag" in n || "keyring" in n -> Triple("tag", tx("explain.finder"), 6)
+            "remote" in n -> Triple("remote", tx("explain.remote"), 6)
+            "hid" in n -> Triple("hid", tx("explain.hid"), 4)
+            "heart" in n -> Triple("health", tx("explain.heart"), 7)
             "glucose" in n || "oximeter" in n || "blood pressure" in n || "thermometer" in n ->
-                Triple("health", "a health sensor", 6)
-            "display" in n || "monitor" in n -> Triple("display", "a display or TV stick", 4)
-            "clock" in n -> Triple("clock", "a clock", 5)
-            "glasses" in n -> Triple("glasses", "smart glasses", 6)
+                Triple("health", tx("explain.health"), 6)
+            "display" in n || "monitor" in n -> Triple("display", tx("explain.display"), 4)
+            "clock" in n -> Triple("clock", tx("explain.clock"), 5)
+            "glasses" in n -> Triple("glasses", tx("explain.glasses"), 6)
             else -> Triple("other", name, 3)
         }
-        return Hint(bucket, label, "It advertises Appearance as $name.", w)
+        return Hint(bucket, label, tx("explain.appearance.as", mapOf("name" to name)), w)
     }
 
     private fun codHint(cod: CodDecoder.Decoded): Hint? {
@@ -257,21 +261,21 @@ object DeviceExplain {
         val major = cod.major.lowercase()
         val (bucket, label, w) = when {
             "headphone" in minor || "headset" in minor || "hands-free" in minor ->
-                Triple("audio-personal", "earbuds or a headset", 6)
+                Triple("audio-personal", tx("explain.headset"), 6)
             "loudspeaker" in minor || "portable audio" in minor || "hifi" in minor || "car audio" in minor ->
-                Triple("audio-speaker", "a speaker", 6)
-            "pointing" in minor || minor == "mouse" -> Triple("mouse", "a mouse", 7)
-            "keyboard" in minor -> Triple("keyboard", "a keyboard", 7)
-            "gamepad" in minor || "joystick" in minor -> Triple("gamepad", "a game controller", 6)
+                Triple("audio-speaker", tx("explain.speaker"), 6)
+            "pointing" in minor || minor == "mouse" -> Triple("mouse", tx("explain.mouse"), 7)
+            "keyboard" in minor -> Triple("keyboard", tx("explain.keyboard"), 7)
+            "gamepad" in minor || "joystick" in minor -> Triple("gamepad", tx("explain.gamepad"), 6)
             "smartphone" in minor || (major == "phone" && "uncategorized" !in minor) ->
-                Triple("phone", "a phone", 5)
+                Triple("phone", tx("explain.phone"), 5)
             "laptop" in minor || "tablet" in minor || "desktop" in minor ->
-                Triple("computer", "a computer", 5)
-            "wristwatch" in minor -> Triple("watch", "a watch", 6)
+                Triple("computer", tx("explain.computer"), 5)
+            "wristwatch" in minor -> Triple("watch", tx("explain.watch.short"), 6)
             "heart" in minor || "pulse" in minor || "glucose" in minor || "oximeter" in minor ->
-                Triple("health", "a health sensor", 6)
-            "audio" in major -> Triple("audio-personal", "an audio device", 3)
-            "peripheral" in major -> Triple("hid", "an input accessory", 3)
+                Triple("health", tx("explain.health"), 6)
+            "audio" in major -> Triple("audio-personal", tx("explain.audio"), 3)
+            "peripheral" in major -> Triple("hid", tx("explain.input"), 3)
             "uncategorized" in major || "miscellaneous" in major -> return null
             else -> return null
         }
@@ -280,7 +284,7 @@ object DeviceExplain {
         } else {
             cod.major
         }
-        return Hint(bucket, label, "Class of Device says $shown.", w)
+        return Hint(bucket, label, tx("explain.cod.says", mapOf("name" to shown)), w)
     }
 
     private fun uuidHints(uuids: List<String>): List<Hint> {
@@ -288,19 +292,19 @@ object DeviceExplain {
         for (uuid in uuids) {
             val id = uuid16(uuid) ?: continue
             when (id) {
-                0x1812 -> out += Hint("hid", "a keyboard, mouse, or gamepad", "It offers the HID (human-interface) service.", 5)
+                0x1812 -> out += Hint("hid", tx("explain.hid.service"), tx("explain.hid.why"), 5)
                 0x1108, 0x1112, 0x111E, 0x110B, 0x110A, 0x1131, 0x1203 ->
-                    out += Hint("audio-personal", "headphones, a headset, or a speaker", "It offers a classic audio / headset service.", 5)
+                    out += Hint("audio-personal", tx("explain.classic.audio"), tx("explain.classic.audio.why"), 5)
                 0x184E, 0x184F, 0x1850, 0x1851 ->
-                    out += Hint("audio-personal", "LE Audio earbuds or a speaker", "It offers Bluetooth LE Audio services.", 6)
-                0x180D -> out += Hint("health", "a heart-rate monitor", "It offers the Heart Rate service.", 6)
-                0x1810 -> out += Hint("health", "a blood-pressure monitor", "It offers the Blood Pressure service.", 6)
-                0x181A -> out += Hint("sensor", "an environmental sensor", "It offers Environmental Sensing.", 4)
-                0xFE2C -> out += Hint("audio-personal", "earbuds or a speaker", "Google Fast Pair is present (common on buds and speakers).", 4)
-                0xFD5A -> out += Hint("tag", "a Samsung SmartTag", "SmartTag service UUID.", 7)
-                0xFD44 -> out += Hint("tag", "an Apple Find My accessory", "Find My related UUID.", 6)
-                0xFEED, 0xFEDD, 0xFEEC -> out += Hint("tag", "a Tile tracker", "Tile service UUID.", 7)
-                0xFEEE -> out += Hint("wearable", "a Polar heart-rate strap or watch", "Polar service UUID.", 7)
+                    out += Hint("audio-personal", tx("explain.le.audio"), tx("explain.le.audio.why"), 6)
+                0x180D -> out += Hint("health", tx("explain.heart"), tx("explain.heart.why"), 6)
+                0x1810 -> out += Hint("health", tx("explain.bp"), tx("explain.bp.why"), 6)
+                0x181A -> out += Hint("sensor", tx("explain.env"), tx("explain.env.why"), 4)
+                0xFE2C -> out += Hint("audio-personal", tx("explain.buds"), tx("explain.fastpair.why"), 4)
+                0xFD5A -> out += Hint("tag", tx("explain.smarttag"), tx("explain.smarttag.why"), 7)
+                0xFD44 -> out += Hint("tag", tx("explain.findmy.acc"), tx("explain.findmy.why"), 6)
+                0xFEED, 0xFEDD, 0xFEEC -> out += Hint("tag", tx("explain.tile"), tx("explain.tile.why"), 7)
+                0xFEEE -> out += Hint("wearable", tx("explain.polar"), tx("explain.polar.why"), 7)
             }
         }
         return out
@@ -319,408 +323,408 @@ object DeviceExplain {
                             "find hub" in n -> "a Google Find Hub tag"
                             else -> "an Apple AirTag / Find My tag"
                         },
-                        "Matched signature $raw.",
+                        matched(raw),
                         8,
                     )
                 "apple device" in n ->
-                    Hint("phone", "an iPhone, iPad, or Mac", "Matched signature $raw.", 7)
+                    Hint("phone", "an iPhone, iPad, or Mac", matched(raw), 7)
                 "apple audio" in n ->
-                    Hint("audio-personal", "AirPods, Beats, or AirPlay", "Matched signature $raw.", 7)
+                    Hint("audio-personal", "AirPods, Beats, or AirPlay", matched(raw), 7)
                 "microsoft" in n ->
-                    Hint("computer", "a Windows / Surface / Xbox radio", "Matched signature $raw.", 6)
+                    Hint("computer", "a Windows / Surface / Xbox radio", matched(raw), 6)
                 n == "tesla tstpms" ->
-                    Hint("vehicle", "a Tesla BLE tire sensor", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Tesla BLE tire sensor", matched(raw), 7)
                 "tpms" in n || n == "tirecheck" || n == "sytpms" ->
-                    Hint("vehicle", "a BLE tire-pressure sensor", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a BLE tire-pressure sensor", matched(raw), 7)
                 n == "vuzix" ->
-                    Hint("glasses", "Vuzix smart glasses", "Matched signature $raw.", 7)
+                    Hint("glasses", "Vuzix smart glasses", matched(raw), 7)
                 n == "tesla" ->
-                    Hint("vehicle", "a Tesla vehicle (including Cybertruck) or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Tesla vehicle (including Cybertruck) or phone-as-key", matched(raw), 7)
                 n == "google" ->
-                    Hint("phone", "a Pixel or other Google radio", "Matched signature $raw.", 6)
+                    Hint("phone", "a Pixel or other Google radio", matched(raw), 6)
                 n == "sony" ->
-                    Hint("audio-personal", "Sony headphones, a TV, or a camera", "Matched signature $raw.", 6)
+                    Hint("audio-personal", "Sony headphones, a TV, or a camera", matched(raw), 6)
                 n == "bose" ->
-                    Hint("audio-personal", "Bose headphones or a speaker", "Matched signature $raw.", 7)
+                    Hint("audio-personal", "Bose headphones or a speaker", matched(raw), 7)
                 n == "garmin" ->
-                    Hint("watch", "a Garmin watch or inReach", "Matched signature $raw.", 7)
+                    Hint("watch", "a Garmin watch or inReach", matched(raw), 7)
                 n == "amazon" ->
-                    Hint("speaker", "an Echo, Fire, or other Amazon radio", "Matched signature $raw.", 6)
+                    Hint("speaker", "an Echo, Fire, or other Amazon radio", matched(raw), 6)
                 n == "fitbit" ->
-                    Hint("watch", "a Fitbit", "Matched signature $raw.", 7)
+                    Hint("watch", "a Fitbit", matched(raw), 7)
                 n == "oura" ->
-                    Hint("wearable", "an Oura ring", "Matched signature $raw.", 7)
+                    Hint("wearable", "an Oura ring", matched(raw), 7)
                 n == "logitech" ->
-                    Hint("hid", "a Logitech mouse, keyboard, or webcam", "Matched signature $raw.", 6)
+                    Hint("hid", "a Logitech mouse, keyboard, or webcam", matched(raw), 6)
                 "jbl" in n || n == "harman" ->
-                    Hint("audio-personal", "JBL or Harman audio", "Matched signature $raw.", 6)
+                    Hint("audio-personal", "JBL or Harman audio", matched(raw), 6)
                 n == "sonos" ->
-                    Hint("audio-speaker", "a Sonos speaker", "Matched signature $raw.", 7)
+                    Hint("audio-speaker", "a Sonos speaker", matched(raw), 7)
                 n == "gopro" ->
-                    Hint("camera", "a GoPro", "Matched signature $raw.", 7)
+                    Hint("camera", "a GoPro", matched(raw), 7)
                 n == "osmo" ->
-                    Hint("camera", "a DJI Osmo action camera", "Matched signature $raw.", 7)
+                    Hint("camera", "a DJI Osmo action camera", matched(raw), 7)
                 n == "insta360" ->
-                    Hint("camera", "an Insta360 camera", "Matched signature $raw.", 7)
+                    Hint("camera", "an Insta360 camera", matched(raw), 7)
                 n == "dji power" ->
-                    Hint("iot", "a DJI Power station", "Matched signature $raw.", 7)
+                    Hint("iot", "a DJI Power station", matched(raw), 7)
                 n == "dji" ->
-                    Hint("drone", "a DJI drone or controller", "Matched signature $raw.", 7)
+                    Hint("drone", "a DJI drone or controller", matched(raw), 7)
                 n == "remote id" ->
-                    Hint("drone", "a drone broadcasting ASTM Remote ID", "Matched signature $raw.", 8)
+                    Hint("drone", "a drone broadcasting ASTM Remote ID", matched(raw), 8)
                 n == "skydio" ->
-                    Hint("drone", "a Skydio drone", "Matched signature $raw.", 7)
+                    Hint("drone", "a Skydio drone", matched(raw), 7)
                 n == "autel" ->
-                    Hint("drone", "an Autel drone", "Matched signature $raw.", 7)
+                    Hint("drone", "an Autel drone", matched(raw), 7)
                 n == "parrot" ->
-                    Hint("drone", "a Parrot ANAFI or Bebop drone", "Matched signature $raw.", 7)
+                    Hint("drone", "a Parrot ANAFI or Bebop drone", matched(raw), 7)
                 n == "hoverair" ->
-                    Hint("drone", "a HOVERAir flying camera", "Matched signature $raw.", 7)
+                    Hint("drone", "a HOVERAir flying camera", matched(raw), 7)
                 n == "netgear" || n == "orbi" ->
-                    Hint("ap", "a NETGEAR or Orbi access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a NETGEAR or Orbi access point", matched(raw), 6)
                 n == "tp-link" ->
-                    Hint("ap", "a TP-Link access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a TP-Link access point", matched(raw), 6)
                 n == "asus" ->
-                    Hint("ap", "an ASUS access point", "Matched signature $raw.", 6)
+                    Hint("ap", "an ASUS access point", matched(raw), 6)
                 n == "linksys" ->
-                    Hint("ap", "a Linksys or Velop access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Linksys or Velop access point", matched(raw), 6)
                 n == "eero" ->
-                    Hint("ap", "an Eero mesh node", "Matched signature $raw.", 6)
+                    Hint("ap", "an Eero mesh node", matched(raw), 6)
                 n == "google wifi" ->
-                    Hint("ap", "a Google Wifi or Nest Wifi point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Google Wifi or Nest Wifi point", matched(raw), 6)
                 n == "d-link" ->
-                    Hint("ap", "a D-Link access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a D-Link access point", matched(raw), 6)
                 n == "belkin" ->
-                    Hint("ap", "a Belkin access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Belkin access point", matched(raw), 6)
                 n == "xfinity" ->
-                    Hint("ap", "an Xfinity gateway or hotspot", "Matched signature $raw.", 6)
+                    Hint("ap", "an Xfinity gateway or hotspot", matched(raw), 6)
                 n == "spectrum" ->
-                    Hint("ap", "a Spectrum gateway or Spectrum Mobile hotspot", "Matched signature $raw.", 6)
+                    Hint("ap", "a Spectrum gateway or Spectrum Mobile hotspot", matched(raw), 6)
                 n == "at&t" ->
-                    Hint("ap", "an AT&T gateway or attwifi hotspot", "Matched signature $raw.", 6)
+                    Hint("ap", "an AT&T gateway or attwifi hotspot", matched(raw), 6)
                 n == "verizon" ->
-                    Hint("ap", "a Verizon or Fios gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a Verizon or Fios gateway", matched(raw), 6)
                 n == "starlink" ->
-                    Hint("ap", "a Starlink router", "Matched signature $raw.", 7)
+                    Hint("ap", "a Starlink router", matched(raw), 7)
                 n == "meraki" ->
-                    Hint("ap", "a Cisco Meraki access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a Cisco Meraki access point", matched(raw), 7)
                 n == "cisco" ->
-                    Hint("ap", "a Cisco Aironet, Catalyst, Business, RV, or SPVTG access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a Cisco Aironet, Catalyst, Business, RV, or SPVTG access point", matched(raw), 7)
                 n == "mist" ->
-                    Hint("ap", "a Juniper Mist access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a Juniper Mist access point", matched(raw), 7)
                 n == "t-mobile" ->
-                    Hint("ap", "a T-Mobile Home Internet gateway or hotspot", "Matched signature $raw.", 6)
+                    Hint("ap", "a T-Mobile Home Internet gateway or hotspot", matched(raw), 6)
                 n == "humax" ->
-                    Hint("ap", "a HUMAX gateway (often T-Mobile Home Internet)", "Matched signature $raw.", 6)
+                    Hint("ap", "a HUMAX gateway (often T-Mobile Home Internet)", matched(raw), 6)
                 n == "sagemcom" ->
-                    Hint("ap", "a Sagemcom ISP gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a Sagemcom ISP gateway", matched(raw), 6)
                 n == "arcadyan" ->
-                    Hint("ap", "an Arcadyan ISP gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "an Arcadyan ISP gateway", matched(raw), 6)
                 n == "askey" ->
-                    Hint("ap", "an Askey ISP / 5G gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "an Askey ISP / 5G gateway", matched(raw), 6)
                 n == "calix" ->
-                    Hint("ap", "a Calix fiber gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a Calix fiber gateway", matched(raw), 6)
                 n == "nokia" ->
-                    Hint("ap", "a Nokia Solutions and Networks gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a Nokia Solutions and Networks gateway", matched(raw), 6)
                 n == "airties" ->
-                    Hint("ap", "an AirTies ISP mesh node", "Matched signature $raw.", 6)
+                    Hint("ap", "an AirTies ISP mesh node", matched(raw), 6)
                 n == "tenda" ->
-                    Hint("ap", "a Tenda access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Tenda access point", matched(raw), 6)
                 n == "ruijie" ->
-                    Hint("ap", "a Ruijie or Reyee access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Ruijie or Reyee access point", matched(raw), 6)
                 n == "dwnet" ->
-                    Hint("ap", "a DWnet access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a DWnet access point", matched(raw), 6)
                 n == "wavlink" ->
-                    Hint("ap", "a WAVLINK access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a WAVLINK access point", matched(raw), 6)
                 n == "sercomm" ->
-                    Hint("ap", "a Sercomm ISP gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a Sercomm ISP gateway", matched(raw), 6)
                 n == "luxul" ->
-                    Hint("ap", "a Luxul access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Luxul access point", matched(raw), 6)
                 n == "sophos" ->
-                    Hint("ap", "a Sophos firewall or access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a Sophos firewall or access point", matched(raw), 7)
                 n == "aumovio" ->
-                    Hint("hotspot", "an AUMOVIO / Continental vehicle Wi-Fi radio", "Matched signature $raw.", 6)
+                    Hint("hotspot", "an AUMOVIO / Continental vehicle Wi-Fi radio", matched(raw), 6)
                 n == "centurylink" ->
-                    Hint("ap", "a CenturyLink gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a CenturyLink gateway", matched(raw), 6)
                 n == "gm hotspot" ->
-                    Hint("hotspot", "a GM in-car hotspot (Cadillac / GMC / Buick / Chevrolet)", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a GM in-car hotspot (Cadillac / GMC / Buick / Chevrolet)", matched(raw), 6)
                 n == "audi mmi" ->
-                    Hint("hotspot", "an Audi MMI in-car hotspot", "Matched signature $raw.", 6)
+                    Hint("hotspot", "an Audi MMI in-car hotspot", matched(raw), 6)
                 n == "extreme" ->
-                    Hint("ap", "an Extreme Networks access point", "Matched signature $raw.", 7)
+                    Hint("ap", "an Extreme Networks access point", matched(raw), 7)
                 n == "adtran" ->
-                    Hint("ap", "an Adtran fiber gateway (often CenturyLink / Quantum Fiber OEM)", "Matched signature $raw.", 6)
+                    Hint("ap", "an Adtran fiber gateway (often CenturyLink / Quantum Fiber OEM)", matched(raw), 6)
                 n == "cambium" ->
-                    Hint("ap", "a Cambium or IgniteNet access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Cambium or IgniteNet access point", matched(raw), 6)
                 n == "trendnet" ->
-                    Hint("ap", "a TRENDnet access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a TRENDnet access point", matched(raw), 6)
                 n == "cudy" ->
-                    Hint("ap", "a Cudy travel or home router", "Matched signature $raw.", 6)
+                    Hint("ap", "a Cudy travel or home router", matched(raw), 6)
                 n == "snapav" ->
-                    Hint("ap", "a SnapAV / Control4 / Wattbox access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a SnapAV / Control4 / Wattbox access point", matched(raw), 6)
                 n == "arlo" ->
-                    Hint("camera", "an Arlo camera or VMB base station", "Matched signature $raw.", 6)
+                    Hint("camera", "an Arlo camera or VMB base station", matched(raw), 6)
                 n == "vantiva" ->
-                    Hint("ap", "a Vantiva or Technicolor ISP gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "a Vantiva or Technicolor ISP gateway", matched(raw), 6)
                 n == "hitron" ->
-                    Hint("ap", "a Hitron cable gateway (often Xfinity OEM)", "Matched signature $raw.", 6)
+                    Hint("ap", "a Hitron cable gateway (often Xfinity OEM)", matched(raw), 6)
                 n == "actiontec" ->
-                    Hint("ap", "an Actiontec FiOS or Frontier gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "an Actiontec FiOS or Frontier gateway", matched(raw), 6)
                 n == "buffalo" ->
-                    Hint("ap", "a Buffalo AirStation or router", "Matched signature $raw.", 6)
+                    Hint("ap", "a Buffalo AirStation or router", matched(raw), 6)
                 n == "grandstream" ->
-                    Hint("ap", "a Grandstream GWN access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Grandstream GWN access point", matched(raw), 6)
                 n == "edgecore" ->
-                    Hint("ap", "an Edgecore access point", "Matched signature $raw.", 7)
+                    Hint("ap", "an Edgecore access point", matched(raw), 7)
                 n == "watchguard ap" ->
-                    Hint("ap", "a WatchGuard firewall or access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a WatchGuard firewall or access point", matched(raw), 7)
                 n == "mojo" ->
-                    Hint("ap", "a Mojo Networks / Arista Cognitive Wi-Fi access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a Mojo Networks / Arista Cognitive Wi-Fi access point", matched(raw), 7)
                 n == "winegard" ->
-                    Hint("hotspot", "a Winegard RV or marine Wi-Fi radio", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a Winegard RV or marine Wi-Fi radio", matched(raw), 6)
                 n == "inseego" ->
-                    Hint("ap", "an Inseego 5G or MiFi hotspot", "Matched signature $raw.", 6)
+                    Hint("ap", "an Inseego 5G or MiFi hotspot", matched(raw), 6)
                 n == "franklin" ->
-                    Hint("ap", "a Franklin Technology 5G home-internet gateway (RG3100 class)", "Matched signature $raw.", 6)
+                    Hint("ap", "a Franklin Technology 5G home-internet gateway (RG3100 class)", matched(raw), 6)
                 n == "synology" ->
-                    Hint("ap", "a Synology NAS or router access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Synology NAS or router access point", matched(raw), 6)
                 n == "aruba" ->
-                    Hint("ap", "an HPE Aruba Instant or Instant On access point", "Matched signature $raw.", 7)
+                    Hint("ap", "an HPE Aruba Instant or Instant On access point", matched(raw), 7)
                 n == "ruckus" ->
-                    Hint("ap", "a RUCKUS access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a RUCKUS access point", matched(raw), 7)
                 n == "fortinet" ->
-                    Hint("ap", "a Fortinet FortiAP or FortiWiFi", "Matched signature $raw.", 7)
+                    Hint("ap", "a Fortinet FortiAP or FortiWiFi", matched(raw), 7)
                 n == "mikrotik" ->
-                    Hint("ap", "a MikroTik router or access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a MikroTik router or access point", matched(raw), 6)
                 n == "engenius" ->
-                    Hint("ap", "an EnGenius access point", "Matched signature $raw.", 6)
+                    Hint("ap", "an EnGenius access point", matched(raw), 6)
                 n == "zyxel" ->
-                    Hint("ap", "a Zyxel gateway or access point", "Matched signature $raw.", 6)
+                    Hint("ap", "a Zyxel gateway or access point", matched(raw), 6)
                 n == "peplink" ->
-                    Hint("ap", "a Peplink or Pepwave router", "Matched signature $raw.", 6)
+                    Hint("ap", "a Peplink or Pepwave router", matched(raw), 6)
                 n == "openwrt" ->
-                    Hint("ap", "an OpenWrt router", "Matched signature $raw.", 6)
+                    Hint("ap", "an OpenWrt router", matched(raw), 6)
                 n == "arris" ->
-                    Hint("ap", "an Arris or SURFboard cable gateway", "Matched signature $raw.", 6)
+                    Hint("ap", "an Arris or SURFboard cable gateway", matched(raw), 6)
                 n == "unifi ap" ->
-                    Hint("ap", "a Ubiquiti UniFi access point", "Matched signature $raw.", 7)
+                    Hint("ap", "a Ubiquiti UniFi access point", matched(raw), 7)
                 n == "unifi protect" ->
-                    Hint("camera", "a UniFi Protect Instant camera", "Matched signature $raw.", 7)
+                    Hint("camera", "a UniFi Protect Instant camera", matched(raw), 7)
                 n == "unifi" ->
-                    Hint("ap", "a UniFi / Ubiquiti name", "Matched signature $raw.", 5)
+                    Hint("ap", "a UniFi / Ubiquiti name", matched(raw), 5)
                 n == "ecobee" ->
-                    Hint("thermostat", "an ecobee thermostat", "Matched signature $raw.", 7)
+                    Hint("thermostat", "an ecobee thermostat", matched(raw), 7)
                 n == "sensi" ->
-                    Hint("thermostat", "a Sensi thermostat", "Matched signature $raw.", 6)
+                    Hint("thermostat", "a Sensi thermostat", matched(raw), 6)
                 n == "honeywell home" ->
-                    Hint("thermostat", "a Honeywell Home or Lyric thermostat", "Matched signature $raw.", 6)
+                    Hint("thermostat", "a Honeywell Home or Lyric thermostat", matched(raw), 6)
                 "honeywell xenon" in n ->
-                    Hint("health", "a Honeywell Xenon healthcare barcode scanner", "Matched signature $raw.", 7)
+                    Hint("health", "a Honeywell Xenon healthcare barcode scanner", matched(raw), 7)
                 n == "omron" ->
-                    Hint("health", "an Omron blood-pressure cuff or scale", "Matched signature $raw.", 7)
+                    Hint("health", "an Omron blood-pressure cuff or scale", matched(raw), 7)
                 n == "withings" ->
-                    Hint("health", "a Withings scale or blood-pressure monitor", "Matched signature $raw.", 7)
+                    Hint("health", "a Withings scale or blood-pressure monitor", matched(raw), 7)
                 n == "dexcom" ->
-                    Hint("health", "a Dexcom glucose sensor", "Matched signature $raw.", 7)
+                    Hint("health", "a Dexcom glucose sensor", matched(raw), 7)
                 n == "nest thermostat" ->
-                    Hint("thermostat", "a Nest thermostat or Nest Labs BLE sensor", "Matched signature $raw.", 6)
+                    Hint("thermostat", "a Nest thermostat or Nest Labs BLE sensor", matched(raw), 6)
                 n == "nest weave" ->
-                    Hint("sensor", "a Nest Protect, camera, or other Weave BLE device", "Matched signature $raw.", 7)
+                    Hint("sensor", "a Nest Protect, camera, or other Weave BLE device", matched(raw), 7)
                 n == "haiku fan" || n == "haiku" ->
-                    Hint("fan", "a Haiku or Mammoth ceiling fan", "Matched signature $raw.", 7)
+                    Hint("fan", "a Haiku or Mammoth ceiling fan", matched(raw), 7)
                 n == "tuya" ->
-                    Hint("iot", "a Tuya BLE gadget (plug, light, camera, sensor)", "Matched signature $raw.", 6)
+                    Hint("iot", "a Tuya BLE gadget (plug, light, camera, sensor)", matched(raw), 6)
                 n == "seos" || n == "assa abloy" ->
-                    Hint("access", "an ASSA ABLOY lock, Yale lock, HID reader, or Seos credential", "Matched signature $raw.", 7)
+                    Hint("access", "an ASSA ABLOY lock, Yale lock, HID reader, or Seos credential", matched(raw), 7)
                 n == "august" ->
-                    Hint("lock", "an August smart lock", "Matched signature $raw.", 7)
+                    Hint("lock", "an August smart lock", matched(raw), 7)
                 n == "schlage" ->
-                    Hint("lock", "a Schlage or Allegion lock", "Matched signature $raw.", 7)
+                    Hint("lock", "a Schlage or Allegion lock", matched(raw), 7)
                 n == "nuki" ->
-                    Hint("lock", "a Nuki lock or opener", "Matched signature $raw.", 7)
+                    Hint("lock", "a Nuki lock or opener", matched(raw), 7)
                 n == "salto" ->
-                    Hint("access", "a SALTO access reader or lock", "Matched signature $raw.", 7)
+                    Hint("access", "a SALTO access reader or lock", matched(raw), 7)
                 n == "dormakaba" ->
-                    Hint("access", "a dormakaba, Saflok, or Oracode lock", "Matched signature $raw.", 7)
+                    Hint("access", "a dormakaba, Saflok, or Oracode lock", matched(raw), 7)
                 n == "lockly" ->
-                    Hint("lock", "a Lockly smart lock", "Matched signature $raw.", 6)
+                    Hint("lock", "a Lockly smart lock", matched(raw), 6)
                 n == "kevo" ->
-                    Hint("lock", "a Kwikset Kevo or Unikey lock", "Matched signature $raw.", 7)
+                    Hint("lock", "a Kwikset Kevo or Unikey lock", matched(raw), 7)
                 n == "master lock" ->
-                    Hint("lock", "a Master Lock padlock", "Matched signature $raw.", 7)
+                    Hint("lock", "a Master Lock padlock", matched(raw), 7)
                 n == "igloohome" ->
-                    Hint("lock", "an igloohome lock or keybox", "Matched signature $raw.", 7)
+                    Hint("lock", "an igloohome lock or keybox", matched(raw), 7)
                 n == "tedee" ->
-                    Hint("lock", "a Tedee smart lock", "Matched signature $raw.", 7)
+                    Hint("lock", "a Tedee smart lock", matched(raw), 7)
                 n == "paxton" ->
-                    Hint("access", "a Paxton reader or Net2 access point", "Matched signature $raw.", 7)
+                    Hint("access", "a Paxton reader or Net2 access point", matched(raw), 7)
                 n == "kwikset" ->
-                    Hint("lock", "a Kwikset lock", "Matched signature $raw.", 6)
+                    Hint("lock", "a Kwikset lock", matched(raw), 6)
                 n == "myq" ->
-                    Hint("garage", "a Chamberlain myQ garage hub", "Matched signature $raw.", 7)
+                    Hint("garage", "a Chamberlain myQ garage hub", matched(raw), 7)
                 n == "chevrolet hotspot" ->
-                    Hint("hotspot", "a Chevrolet in-car Wi-Fi hotspot", "Matched signature $raw.", 7)
+                    Hint("hotspot", "a Chevrolet in-car Wi-Fi hotspot", matched(raw), 7)
                 n == "rivian" ->
-                    Hint("vehicle", "a Rivian vehicle, phone key, or sensor", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Rivian vehicle, phone key, or sensor", matched(raw), 7)
                 n == "ford" ->
-                    Hint("vehicle", "a Ford or Lincoln vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Ford or Lincoln vehicle or phone-as-key", matched(raw), 7)
                 n == "honda" ->
-                    Hint("vehicle", "a Honda or Acura vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Honda or Acura vehicle or phone-as-key", matched(raw), 7)
                 n == "hyundai" ->
-                    Hint("vehicle", "a Hyundai or Genesis vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Hyundai or Genesis vehicle or phone-as-key", matched(raw), 7)
                 n == "toyota" ->
-                    Hint("vehicle", "a Toyota or Lexus vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Toyota or Lexus vehicle or phone-as-key", matched(raw), 7)
                 n == "nissan" ->
-                    Hint("vehicle", "a Nissan or Infiniti vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Nissan or Infiniti vehicle or phone-as-key", matched(raw), 7)
                 n == "subaru" ->
-                    Hint("vehicle", "a Subaru vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Subaru vehicle or phone-as-key", matched(raw), 7)
                 n == "bmw" ->
-                    Hint("vehicle", "a BMW vehicle, phone-as-key, or factory hotspot", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a BMW vehicle, phone-as-key, or factory hotspot", matched(raw), 7)
                 n == "volkswagen" ->
-                    Hint("vehicle", "a Volkswagen vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Volkswagen vehicle or phone-as-key", matched(raw), 7)
                 n == "porsche" ->
-                    Hint("vehicle", "a Porsche vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Porsche vehicle or phone-as-key", matched(raw), 7)
                 n == "jaguar land rover" ->
-                    Hint("vehicle", "a Jaguar, Land Rover, or Range Rover", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a Jaguar, Land Rover, or Range Rover", matched(raw), 7)
                 n == "byd" ->
-                    Hint("vehicle", "a BYD vehicle or phone-as-key", "Matched signature $raw.", 7)
+                    Hint("vehicle", "a BYD vehicle or phone-as-key", matched(raw), 7)
                 n == "govee" ->
-                    Hint("light", "a Govee light or sensor", "Matched signature $raw.", 6)
+                    Hint("light", "a Govee light or sensor", matched(raw), 6)
                 n == "hp" ->
-                    Hint("printer", "an HP printer", "Matched signature $raw.", 6)
+                    Hint("printer", "an HP printer", matched(raw), 6)
                 n == "epson" ->
-                    Hint("printer", "an Epson EcoTank or WorkForce printer", "Matched signature $raw.", 6)
+                    Hint("printer", "an Epson EcoTank or WorkForce printer", matched(raw), 6)
                 n == "lg webos tv" ->
-                    Hint("tv", "an LG webOS TV", "Matched signature $raw.", 7)
+                    Hint("tv", "an LG webOS TV", matched(raw), 7)
                 n == "roku" ->
-                    Hint("tv", "a Roku streaming stick or Roku TV (often a hidden Wi-Fi Direct remote AP)", "Matched signature $raw.", 7)
+                    Hint("tv", "a Roku streaming stick or Roku TV (often a hidden Wi-Fi Direct remote AP)", matched(raw), 7)
                 n == "samsung appliance" ->
-                    Hint("iot", "a Samsung fridge, range, oven, or cooktop (setup AP)", "Matched signature $raw.", 6)
+                    Hint("iot", "a Samsung fridge, range, oven, or cooktop (setup AP)", matched(raw), 6)
                 n == "ecowater" ->
-                    Hint("iot", "an EcoWater water softener (setup AP)", "Matched signature $raw.", 6)
+                    Hint("iot", "an EcoWater water softener (setup AP)", matched(raw), 6)
                 n == "nespresso" ->
-                    Hint("iot", "a Nespresso coffee machine", "Matched signature $raw.", 7)
+                    Hint("iot", "a Nespresso coffee machine", matched(raw), 7)
                 n == "radiacode" ->
-                    Hint("sensor", "a RadiaCode radiation detector", "Matched signature $raw.", 7)
+                    Hint("sensor", "a RadiaCode radiation detector", matched(raw), 7)
                 n == "shokz" ->
-                    Hint("audio-personal", "Shokz OpenRun or OpenFit headphones", "Matched signature $raw.", 7)
+                    Hint("audio-personal", "Shokz OpenRun or OpenFit headphones", matched(raw), 7)
                 n == "mercedes mbux" ->
-                    Hint("hotspot", "a Mercedes MBUX in-car hotspot", "Matched signature $raw.", 7)
+                    Hint("hotspot", "a Mercedes MBUX in-car hotspot", matched(raw), 7)
                 n == "motive" ->
-                    Hint("hotspot", "a Motive / KeepTruckin fleet ELD hotspot", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a Motive / KeepTruckin fleet ELD hotspot", matched(raw), 6)
                 n == "peoplenet" ->
-                    Hint("hotspot", "a PeopleNet fleet ELD hotspot", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a PeopleNet fleet ELD hotspot", matched(raw), 6)
                 n == "uconnect" ->
-                    Hint("hotspot", "a Uconnect in-car hotspot", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a Uconnect in-car hotspot", matched(raw), 6)
                 n == "carplay" ->
-                    Hint("hotspot", "a CarPlay in-car hotspot", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a CarPlay in-car hotspot", matched(raw), 6)
                 n == "cradlepoint" ->
-                    Hint("hotspot", "a Cradlepoint vehicle router (often public-safety / fleet)", "Matched signature $raw.", 7)
+                    Hint("hotspot", "a Cradlepoint vehicle router (often public-safety / fleet)", matched(raw), 7)
                 n == "airlink" ->
-                    Hint("hotspot", "a Sierra Wireless AirLink vehicle gateway", "Matched signature $raw.", 7)
+                    Hint("hotspot", "a Sierra Wireless AirLink vehicle gateway", matched(raw), 7)
                 n == "compex" ->
-                    Hint("hotspot", "a Compex access point (sometimes public-safety / fleet)", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a Compex access point (sometimes public-safety / fleet)", matched(raw), 6)
                 n == "novatel wireless" ->
-                    Hint("hotspot", "a Novatel Wireless / Inseego vehicle radio", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a Novatel Wireless / Inseego vehicle radio", matched(raw), 6)
                 n == "utility inc" ->
-                    Hint("hotspot", "a Utility, Inc vehicle or public-safety radio", "Matched signature $raw.", 6)
+                    Hint("hotspot", "a Utility, Inc vehicle or public-safety radio", matched(raw), 6)
                 "gl.inet" in n || n == "glinet" ->
-                    Hint("ap", "a GL.iNet travel router", "Matched signature $raw.", 6)
+                    Hint("ap", "a GL.iNet travel router", matched(raw), 6)
                 "smarttag" in n ->
-                    Hint("tag", "a Samsung SmartTag", "Matched signature $raw.", 8)
+                    Hint("tag", "a Samsung SmartTag", matched(raw), 8)
                 "tile" in n ->
-                    Hint("tag", "a Tile tracker", "Matched signature $raw.", 8)
+                    Hint("tag", "a Tile tracker", matched(raw), 8)
                 n == "ibeacon" ->
-                    Hint("beacon", "an iBeacon", "Matched signature $raw.", 7)
+                    Hint("beacon", "an iBeacon", matched(raw), 7)
                 "atrius" in n ->
-                    Hint("beacon", "an Atrius cart tag", "Matched signature $raw.", 8)
+                    Hint("beacon", "an Atrius cart tag", matched(raw), 8)
                 n == "minew" ->
-                    Hint("beacon", "a Minew BLE beacon or sensor", "Matched signature $raw.", 7)
+                    Hint("beacon", "a Minew BLE beacon or sensor", matched(raw), 7)
                 n == "estimote" ->
-                    Hint("beacon", "an Estimote beacon", "Matched signature $raw.", 7)
+                    Hint("beacon", "an Estimote beacon", matched(raw), 7)
                 n == "kontakt.io" || n == "kontakt" ->
-                    Hint("beacon", "a Kontakt.io beacon", "Matched signature $raw.", 7)
+                    Hint("beacon", "a Kontakt.io beacon", matched(raw), 7)
                 "bluetoad" in n ->
                     Hint(
                         "roadside",
                         "an Iteris BlueTOAD / Vantage Velocity roadside Bluetooth travel-time reader",
-                        "Matched signature $raw.",
+                        matched(raw),
                         7,
                     )
                 "bliptrack" in n ->
                     Hint(
                         "roadside",
                         "a BLIP Systems BlipTrack roadside travel-time sensor",
-                        "Matched signature $raw.",
+                        matched(raw),
                         7,
                     )
                 "raven" in n || "shotspotter" in n || "soundthinking" in n ->
                     Hint(
                         "acoustic",
                         "a Flock Raven or ShotSpotter acoustic gunshot sensor",
-                        "Matched signature $raw.",
+                        matched(raw),
                         8,
                     )
                 "digital ally" in n ->
-                    Hint("camera", "a Digital Ally body-worn or in-car camera", "Matched signature $raw.", 8)
+                    Hint("camera", "a Digital Ally body-worn or in-car camera", matched(raw), 8)
                 "reveal media" in n || "bodyworn" in n ->
-                    Hint("camera", "a Reveal Media body-worn camera", "Matched signature $raw.", 8)
+                    Hint("camera", "a Reveal Media body-worn camera", matched(raw), 8)
                 n == "wolfcom" ->
-                    Hint("camera", "a Wolfcom body-worn or in-car camera", "Matched signature $raw.", 8)
+                    Hint("camera", "a Wolfcom body-worn or in-car camera", matched(raw), 8)
                 "i-pro" in n || "arbitrator" in n ->
-                    Hint("camera", "a Panasonic i-PRO camera or Arbitrator in-car system", "Matched signature $raw.", 8)
+                    Hint("camera", "a Panasonic i-PRO camera or Arbitrator in-car system", matched(raw), 8)
                 "limitless" in n ->
-                    Hint("wearable", "a Limitless Pendant conversation recorder", "Matched signature $raw.", 8)
+                    Hint("wearable", "a Limitless Pendant conversation recorder", matched(raw), 8)
                 n == "bee pendant" || "bee pioneer" in n ->
-                    Hint("wearable", "a Bee Pioneer wearable recorder", "Matched signature $raw.", 8)
+                    Hint("wearable", "a Bee Pioneer wearable recorder", matched(raw), 8)
                 n == "omi" || "openglass" in n ->
-                    Hint("wearable", "an Omi pendant or OpenGlass camera glasses", "Matched signature $raw.", 8)
+                    Hint("wearable", "an Omi pendant or OpenGlass camera glasses", matched(raw), 8)
                 "friend pendant" in n ->
-                    Hint("wearable", "a Friend Pendant necklace", "Matched signature $raw.", 8)
+                    Hint("wearable", "a Friend Pendant necklace", matched(raw), 8)
                 "brilliant frame" in n ->
-                    Hint("glasses", "Brilliant Labs Frame AR glasses", "Matched signature $raw.", 8)
+                    Hint("glasses", "Brilliant Labs Frame AR glasses", matched(raw), 8)
                 n == "even g1" ->
-                    Hint("glasses", "Even Realities G1 glasses", "Matched signature $raw.", 8)
+                    Hint("glasses", "Even Realities G1 glasses", matched(raw), 8)
                 "hayden" in n ->
-                    Hint("camera", "a Hayden AI bus- or vehicle-mounted camera", "Matched signature $raw.", 8)
+                    Hint("camera", "a Hayden AI bus- or vehicle-mounted camera", matched(raw), 8)
                 "miovision" in n ->
-                    Hint("camera", "a Miovision intersection traffic camera", "Matched signature $raw.", 8)
+                    Hint("camera", "a Miovision intersection traffic camera", matched(raw), 8)
                 n == "tattile" ->
-                    Hint("camera", "a Tattile plate reader", "Matched signature $raw.", 8)
+                    Hint("camera", "a Tattile plate reader", matched(raw), 8)
                 "lvt" in n || "liveview" in n ->
-                    Hint("camera", "an LVT / LiveView solar surveillance trailer", "Matched signature $raw.", 8)
+                    Hint("camera", "an LVT / LiveView solar surveillance trailer", matched(raw), 8)
                 "hanwha" in n || "wisenet" in n ->
-                    Hint("camera", "a Hanwha Vision / Wisenet camera", "Matched signature $raw.", 7)
+                    Hint("camera", "a Hanwha Vision / Wisenet camera", matched(raw), 7)
                 n == "uniview" ->
-                    Hint("camera", "a Uniview / UNV camera", "Matched signature $raw.", 7)
+                    Hint("camera", "a Uniview / UNV camera", matched(raw), 7)
                 n == "rhombus" ->
-                    Hint("camera", "a Rhombus cloud camera", "Matched signature $raw.", 7)
+                    Hint("camera", "a Rhombus cloud camera", matched(raw), 7)
                 n == "meshcore" ->
-                    Hint("mesh", "a MeshCore LoRa companion radio", "Matched signature $raw.", 7)
+                    Hint("mesh", "a MeshCore LoRa companion radio", matched(raw), 7)
                 n == "bitchat" ->
-                    Hint("mesh", "a Bitchat BLE mesh chat", "Matched signature $raw.", 7)
+                    Hint("mesh", "a Bitchat BLE mesh chat", matched(raw), 7)
                 "gotenna" in n ->
-                    Hint("mesh", "a goTenna Mesh or Pro radio", "Matched signature $raw.", 7)
+                    Hint("mesh", "a goTenna Mesh or Pro radio", matched(raw), 7)
                 n == "sensecap" ->
-                    Hint("mesh", "a SenseCAP LoRaWAN / Helium gateway", "Matched signature $raw.", 7)
+                    Hint("mesh", "a SenseCAP LoRaWAN / Helium gateway", matched(raw), 7)
                 "wisgate" in n || n == "rak wisgate" ->
-                    Hint("mesh", "a RAK WisGate LoRaWAN gateway", "Matched signature $raw.", 7)
+                    Hint("mesh", "a RAK WisGate LoRaWAN gateway", matched(raw), 7)
                 n == "ghostesp" ->
-                    Hint("pentest", "a GhostESP ESP32 audit board", "Matched signature $raw.", 7)
+                    Hint("pentest", "a GhostESP ESP32 audit board", matched(raw), 7)
                 n == "bruce" ->
-                    Hint("pentest", "a Bruce ESP32 pentest board", "Matched signature $raw.", 7)
+                    Hint("pentest", "a Bruce ESP32 pentest board", matched(raw), 7)
                 n == "liteon camera radio" ->
                     Hint(
                         "module",
                         "a camera-module radio (LiteOn or similar)",
-                        "Matched signature $raw.",
+                        matched(raw),
                         3,
                     )
                 "chipolo" in n || "pebblebee" in n || "moto tag" in n ->
-                    Hint("tag", "a finder tag", "Matched signature $raw.", 7)
+                    Hint("tag", "a finder tag", matched(raw), 7)
                 "airpods" in n ->
-                    Hint("audio-personal", "AirPods", "Matched signature $raw.", 8)
-                else -> Hint("named", raw, "Matched signature $raw.", 7)
+                    Hint("audio-personal", "AirPods", matched(raw), 8)
+                else -> Hint("named", raw, matched(raw), 7)
             }
         }
     }
@@ -739,21 +743,21 @@ object DeviceExplain {
         when {
             name.startsWith("DIRECT-", true) ->
                 out += if (specific) {
-                    Hint("wifi-direct", "a Wi-Fi Direct access point", "SSID starts with DIRECT-.", 4)
+                    Hint("wifi-direct", tx("explain.wifi.direct.ap"), tx("explain.wifi.direct.why"), 4)
                 } else {
-                    Hint("wifi-direct", "a phone or TV using Wi-Fi Direct", "SSID starts with DIRECT-.", 6)
+                    Hint("wifi-direct", tx("explain.wifi.direct.phone"), tx("explain.wifi.direct.why"), 6)
                 }
             name.startsWith("ANDROID-", true) || name.contains("hotspot", true) ->
                 if (!specific) {
-                    out += Hint("hotspot", "a phone hotspot", "SSID looks like a phone hotspot.", 6)
+                    out += Hint("hotspot", tx("explain.hotspot"), tx("explain.hotspot.why"), 6)
                 }
             "MESH" in caps ->
-                out += Hint("mesh", "a mesh Wi-Fi node", "Capability list includes mesh.", 5)
+                out += Hint("mesh", tx("explain.mesh.node"), tx("explain.mesh.why"), 5)
             device.hiddenSsid ->
-                out += Hint("ap", "a hidden Wi-Fi access point", "SSID is hidden; the radio is still beaconing.", 4)
+                out += Hint("ap", tx("explain.hidden.ap"), tx("explain.hidden.why"), 4, generic = true)
             else ->
                 if (!specific) {
-                    out += Hint("ap", "a Wi-Fi access point", "Stock Android only reports beaconing APs.", 3)
+                    out += Hint("ap", tx("explain.ap"), tx("explain.ap.why"), 3, generic = true)
                 }
         }
         return out
@@ -769,4 +773,10 @@ object DeviceExplain {
             else -> null
         }
     }
+
+    private fun tx(key: String) = LanguageText.text(key)
+
+    private fun tx(key: String, values: Map<String, String>) = LanguageText.text(key, values)
+
+    private fun matched(raw: String) = tx("explain.matched", mapOf("name" to raw))
 }

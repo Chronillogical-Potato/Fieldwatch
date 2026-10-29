@@ -68,7 +68,9 @@ import app.fieldwatch.domain.ServiceDataRecord
 import app.fieldwatch.domain.Sighting
 import app.fieldwatch.domain.SignatureFamilyHint
 import app.fieldwatch.domain.SignatureFieldDecoder
+import app.fieldwatch.domain.SmartTag
 import app.fieldwatch.domain.hexSpaced
+import app.fieldwatch.domain.maskedRawBytes
 import app.fieldwatch.domain.LanguageText
 import app.fieldwatch.domain.label
 import app.fieldwatch.radio.BleAdParser
@@ -218,7 +220,9 @@ fun DeviceDetailScreen(
                         nameDraft = draftLabel
                         lastSaved = draftLabel
                         scope.launch {
-                            snackbarHostState.showSnackbar("Saved as $draftLabel")
+                            snackbarHostState.showSnackbar(
+                                LanguageText.text("device.saved", mapOf("name" to draftLabel)),
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
@@ -319,6 +323,9 @@ fun DeviceDetailScreen(
                     }
                 }
             }
+            if (device.kind == RadioKind.WIFI) {
+                TrustNetworkControl(device, vm)
+            }
 
             val guess = DeviceExplain.guess(device, device.fleetIds.map { vm.fleetName(it) })
             StickyHeight(device.key to "guess") { GuessCard(guess) }
@@ -343,7 +350,10 @@ fun DeviceDetailScreen(
                 )
                 Meta(LanguageText.text("ui.address.label"), DeviceExplain.addressExplain(device))
                 vendorLine(device)?.let { Meta(LanguageText.text("ui.who.made"), it) }
-                    ?: Meta(LanguageText.text("ui.oui.vendor.prefix"), "${device.oui} — no IEEE match; randomized addresses usually have none")
+                    ?: Meta(
+                        LanguageText.text("ui.oui.vendor.prefix"),
+                        LanguageText.text("device.oui.none", mapOf("oui" to device.oui)),
+                    )
                 if (device.hiddenSsid) {
                     Meta(LanguageText.text("ui.network.name.ssid"), LanguageText.text("ui.hidden.ap.beaconing.but"))
                 }
@@ -358,7 +368,8 @@ fun DeviceDetailScreen(
                         buildString {
                             append(fmt.format(Date(device.lastSeen)))
                             Rssi.lastMeasured(device.rssi, device.rssiHistory)?.let {
-                                append(" at $it dBm")
+                                append(" ")
+                                append(LanguageText.text("device.at.dbm", mapOf("n" to it.toString())))
                             }
                         },
                     )
@@ -375,18 +386,26 @@ fun DeviceDetailScreen(
                     Rssi.sessionRange(device.rssiMin, device.rssiMax, device.rssiHistory),
                 )
                 facts.txPowerDbm?.let {
-                    Meta(LanguageText.text("ui.claimed.transmit.power"), "$it dBm — how loud it says it transmits, not a distance")
+                    Meta(
+                        LanguageText.text("ui.claimed.transmit.power"),
+                        LanguageText.text("device.tx", mapOf("n" to it.toString())),
+                    )
                 }
                 if (device.channel != 0 || device.frequencyMhz != 0) {
                     Meta(
                         LanguageText.text("ui.channel.frequency"),
                         buildString {
-                            if (device.channel != 0) append("channel ${device.channel}")
+                            if (device.channel != 0) {
+                                append(LanguageText.text("device.channel", mapOf("n" to device.channel.toString())))
+                            }
                             if (device.frequencyMhz != 0) {
                                 if (isNotEmpty()) append("  ·  ")
                                 append("${device.frequencyMhz} MHz")
                             }
-                            facts.channelWidth?.let { append("  ·  $it wide") }
+                            facts.channelWidth?.let {
+                                append("  ·  ")
+                                append(LanguageText.text("device.wide", mapOf("width" to it)))
+                            }
                         },
                     )
                 }
@@ -419,7 +438,10 @@ fun DeviceDetailScreen(
                 facts.advertisingIntervalMs?.let {
                     Meta(
                         LanguageText.text("ui.how.often.advertises"),
-                        "%.0f ms between bursts (smaller = chattier on the air)".format(it),
+                        LanguageText.text(
+                            "device.burst",
+                            mapOf("n" to "%.0f".format(Locale.US, it)),
+                        ),
                     )
                 }
                 facts.periodicIntervalMs?.let {
@@ -433,8 +455,11 @@ fun DeviceDetailScreen(
                     val name = RadioDb.appearance(value)
                     Meta(
                         LanguageText.text("ui.what.says.appearance"),
-                        name?.let { "$it\nThe device publishes this GAP Appearance code to describe itself." }
-                            ?: "Unlisted Appearance 0x%04X".format(value),
+                        name?.let { "$it\n" + LanguageText.text("device.appearance") }
+                            ?: LanguageText.text(
+                                "device.appearance.unlisted",
+                                mapOf("code" to "0x%04X".format(Locale.US, value)),
+                            ),
                     )
                     Meta(LanguageText.text("ui.appearance.code"), "0x%04X".format(value), mono = true)
                 }
@@ -463,7 +488,10 @@ fun DeviceDetailScreen(
                         if (it.isNotBlank()) Meta(LanguageText.text("ui.security.string"), it, mono = true)
                     }
                     facts.supportedRates?.let {
-                        Meta(LanguageText.text("ui.supported.rates"), "$it Mbps  (* = required basic rate)")
+                        Meta(
+                            LanguageText.text("ui.supported.rates"),
+                            "$it " + LanguageText.text("device.rates.note"),
+                        )
                     }
                     facts.capabilities?.takeIf { it.isNotBlank() && it != facts.security }?.let {
                         Meta(LanguageText.text("ui.capability.string"), it, mono = true)
@@ -486,9 +514,24 @@ fun DeviceDetailScreen(
                     facts.serviceData.forEach { sd ->
                         val decoded = app.fieldwatch.domain.AdvPayloadDecoder.decodeService(sd)
                         decoded.forEach { field -> Meta(field.label, field.value) }
+                        if (SmartTag.isService(sd.uuid)) {
+                            SmartTag.parse(sd.dataHex)?.let { tag ->
+                                tag.state?.let { Meta(LanguageText.text("device.state"), it) }
+                                Meta(LanguageText.text("device.aging"), tag.aging.toString())
+                                Meta(LanguageText.text("device.battery"), tag.battery)
+                                Meta("UWB", tag.uwb)
+                                val idText = if (demoMode) "masked" else tag.privacyId.hexSpaced()
+                                Meta(
+                                    LanguageText.text("device.privacy"),
+                                    idText + "\n" + LanguageText.text("device.not.serial"),
+                                    mono = !demoMode,
+                                )
+                            }
+                        }
                         Meta(
                             serviceDataHeading(sd),
-                            sd.dataHex.hexSpaced().ifBlank { "(empty)" },
+                            if (demoMode && sd.dataHex.isNotBlank()) maskedRawBytes(sd.dataHex, true)
+                            else sd.dataHex.hexSpaced().ifBlank { LanguageText.text("device.empty") },
                             mono = true,
                         )
                     }
@@ -587,13 +630,23 @@ fun DeviceDetailScreen(
                     mfg.forEach { rec ->
                         val company = RadioDb.company(rec.companyId) ?: LanguageText.text("ui.not.bluetooth.company.list")
                         Meta(
-                            "Bluetooth company 0x%04X".format(rec.companyId),
-                            "$company\nThis ID is assigned by the Bluetooth SIG and is carried in manufacturer-specific data.",
+                            LanguageText.text(
+                                "device.company",
+                                mapOf("id" to "0x%04X".format(Locale.US, rec.companyId)),
+                            ),
+                            "$company\n" + LanguageText.text("device.company.about"),
                         )
                         val decoded = BleAdParser.mfgDecodedFields(rec)
                         decoded.forEach { (k, v) -> Meta(k, v) }
                         if (rec.dataHex.isNotBlank()) {
-                            Meta("Raw payload (${rec.dataHex.length / 2} bytes)", rec.dataHex.hexSpaced(), mono = true)
+                            Meta(
+                                LanguageText.text(
+                                    "device.raw",
+                                    mapOf("n" to (rec.dataHex.length / 2).toString()),
+                                ),
+                                if (demoMode) maskedRawBytes(rec.dataHex, false) else rec.dataHex.hexSpaced(),
+                                mono = true,
+                            )
                         }
                     }
                 }
@@ -607,15 +660,19 @@ fun DeviceDetailScreen(
                     }
                     rows.forEach { ie ->
                         val org = RadioDb.vendorForOui24(ie.oui)
-                        val type = if (ie.type >= 0) " type %d".format(ie.type) else ""
+                        val type = if (ie.type >= 0) {
+                            " " + LanguageText.text("device.vendor.type", mapOf("n" to ie.type.toString()))
+                        } else {
+                            ""
+                        }
                         Meta(
-                            "Vendor OUI ${ie.oui}$type",
+                            LanguageText.text("device.vendor", mapOf("oui" to ie.oui)) + type,
                             buildString {
                                 append(org ?: LanguageText.text("ui.unknown.ieee.oui"))
                                 append((" " + LanguageText.text("ui.extra.ap.information.element")))
                                 if (ie.dataHex.isNotBlank()) {
                                     append("\n")
-                                    append(ie.dataHex.hexSpaced())
+                                    append(if (demoMode) maskedRawBytes(ie.dataHex, true) else ie.dataHex.hexSpaced())
                                 }
                             },
                         )
@@ -643,7 +700,10 @@ fun DeviceDetailScreen(
                     )
                 }
                 if (device.rawHex.isNotBlank() && device.kind == RadioKind.BLE) {
-                    Meta(LanguageText.text("ui.raw.advertisement"), device.rawHex.hexSpaced())
+                    Meta(
+                        LanguageText.text("ui.raw.advertisement"),
+                        if (demoMode) maskedRawBytes(device.rawHex, true) else device.rawHex.hexSpaced(),
+                    )
                 }
             }
 
@@ -939,12 +999,21 @@ private fun Meta(label: String, value: String, mono: Boolean = false) {
 private fun vendorLine(device: Sighting): String? {
     val parts = ArrayList<String>(3)
     device.vendor?.let {
-        parts += "IEEE board/chip vendor: $it (${device.oui}). This is who owns the MAC prefix, not always the product brand."
+        parts += LanguageText.text(
+            "device.vendor.line",
+            mapOf("vendor" to it, "oui" to device.oui),
+        )
     }
     val mfgId = device.facts.mfgRecords.firstOrNull()?.companyId ?: device.manufacturerId
     if (mfgId != null) {
         val company = RadioDb.company(mfgId)
-        parts += "Bluetooth company in the ad: ${company ?: "unlisted"} (0x%04X).".format(mfgId)
+        parts += LanguageText.text(
+            "device.company.ad",
+            mapOf(
+                "company" to (company ?: LanguageText.text("device.unlisted")),
+                "id" to "0x%04X".format(Locale.US, mfgId),
+            ),
+        )
     }
     return parts.joinToString("\n").ifBlank { null }
 }
@@ -957,7 +1026,7 @@ private fun uuidShort(uuid: String): String {
 private fun serviceDataHeading(sd: ServiceDataRecord): String {
     val named = RadioDb.serviceUuid(sd.uuid)?.let { " ($it)" } ?: ""
     val frame = eddystoneFrameTag(sd)?.let { " · $it" } ?: ""
-    return "Service data ${uuidShort(sd.uuid)}$named$frame"
+    return LanguageText.text("device.service.data", mapOf("id" to uuidShort(sd.uuid))) + named + frame
 }
 
 private fun eddystoneFrameTag(sd: ServiceDataRecord): String? {

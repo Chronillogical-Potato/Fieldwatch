@@ -10,6 +10,7 @@ import kotlinx.serialization.Serializable
 import java.io.File
 import java.io.InputStream
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 
 class AssetLanguageFiles(
     private val assets: android.content.res.AssetManager,
@@ -79,6 +80,7 @@ class LanguageStore(
     }
 
     fun confirm(preview: LanguagePreview, phone: Locale): LanguageSnapshot {
+        val previous = disk
         disk = disk.copy(
             pack = LanguageFile(
                 format = EnglishCopy.FORMAT,
@@ -89,7 +91,15 @@ class LanguageStore(
                 strings = preview.accepted,
             ),
         )
-        save()
+        try {
+            save()
+        } catch (e: CancellationException) {
+            disk = previous
+            throw e
+        } catch (e: Exception) {
+            disk = previous
+            throw e
+        }
         snapshot = resolve(phone)
         return snapshot
     }

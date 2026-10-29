@@ -4,6 +4,30 @@ Newest first. This is Fieldwatch (`app.fieldwatch`). Each build below is what Se
 
 Fieldwatch continues the Spectre 1.2.14 field build under a new name, application id, and the MIT License. It does not replace Spectre on a phone.
 
+## 1.1.35 — 29 October 2026
+
+- Language packs cover more of the on-screen text: the live sit line, the radar, device explanations, filters, reports, and the human-readable Debrief and Compare wording, including the PDF. The English template lists a character limit for each line. Signature names and catalog notes stay English. CSV, JSON, GPX, KML, and the other machine exports stay as they are.
+- Importing a language pack can save a text report. It names the keys that will be used, the keys that are missing, and each line that is too long, with the length and the limit.
+- GNSS interference, Location and Maps, and TAK / CoT group the on/off switch apart from the choices under it. Each control has a short line about what it does. Warning level replaces Alert from. Warn when the signal holds replaces Spoofing checks. Keep the GPS receiver awake, Count satellites fading together, and Gain reads backwards replace the old receiver switches. Known cameras replaces Layers. Corner readout replaces Position. Display location on map is the title on that group.
+- On Trusted networks, the on/off switch sits on its own. The warning checks are in a Warnings group, each with a short line about what it catches. Learning, and how a warning reaches you, are separate.
+- On TAK / CoT, the GNSS heading is GNSS warnings. The Trusted networks heading on that page is gone. The note sits under Network warnings.
+- On TAK / CoT, the Floods heading is BLE Flood warnings. A Wi-Fi beacon flood still uses that same line. The notes under the TAK controls are shorter, and Trusted networks has one.
+- On TAK / CoT, under Trusted networks, that switch is Network warnings. The hold under it is How long a warning spot stays.
+- The Trusted networks TAK pin, and how long that pin stays, are on Settings → TAK / CoT. Both stay dim until Watch trusted networks is on.
+- The guide says Trusted networks is not a substitute for checking a network yourself. A quiet watch is not a finding that the network is safe.
+- The Display switch on Live is Show map with live path.
+- TAK / CoT to this phone no longer tries to pin its socket. Diagnostics says whether that same-phone feed reaches ATAK. It reaches ATAK when the socket opened on Wi-Fi or Ethernet. On cellular alone it needs Wi-Fi. A socket opened without Wi-Fi or Ethernet is still replaced once either connects.
+- Privacy mode masks raw advertisement bytes on the radio page, in Share as text, and in one-radio AI Export. The row keeps its label and byte count, and the hex shows as masked. Logs and sit export stay complete.
+- A Samsung SmartTag advertisement now says whether it is separated from its owner or with its owner, and a separated tag is followed across address changes.
+- Show live path, Hunt, and Reports → Path draw saved map pictures when the phone has no connection. A place with no saved picture stays a plain line. New pictures are still downloaded only while online.
+- The sit report leaves a camera list out when its layer switch is off. The count and the marks on the printed path stay off. The file stays on the phone. A switch that is on still names a list that is not on the phone.
+- Trusted networks watches a Wi-Fi name you mark on that radio's page. It can alert when a later sighting of that name is weaker, from an unknown maker, or far from the places this phone usually hears it. The list, the learning window, and a TAK pin are under Settings. The pin starts off. The phone does not connect to the network or ask for its password.
+- Show live path and Reports → Path open a card when you tap a known camera. The card names the kind, the company when the list has one, and the facing when one is stored. A number is several of that kind. Tap the mark again to close it. The card has no coordinates.
+- Opening Fieldwatch no longer closes while the path reads a saved camera list. A failed camera download stays on the settings row and says why. A saved copy stays, and the path still opens.
+- Importing a language pack, signatures, settings, trusted networks, or the stock catalog says why it failed. A file that cannot be read, is empty, is too large, or cannot be saved leaves what is already on the phone.
+- A watchlist alert on Live opens in the list under Show live path. By class, the strength list, Timeline, and Hybrid keep that row in the space below the map.
+- Tapping a known camera on the map uses the same card as a detection. The line meets that card. Cameras on the same spot are listed together.
+
 ## 1.1.34 — 27 October 2026
 
 - TAK / CoT to this phone pins the loopback socket to lo before it is bound. A socket opened without Wi-Fi or Ethernet is replaced once either connects, including when cellular was already up. A socket opened on that LAN keeps sending after the LAN drops. Diagnostics lists whether TAK is on, the destination kind and port, whether the loopback socket is bound to lo, what was connected when it opened, and whether the last send succeeded. The host address stays off that page.

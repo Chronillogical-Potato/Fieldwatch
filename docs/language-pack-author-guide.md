@@ -22,6 +22,8 @@ Set `language` to the name people should see. It can be at most 40 characters. S
 
 The template also has a `slots` object, one slot name for each key. That object is there so you can see where the line sits. Import ignores it. The app uses the slot compiled into the version that reads the file.
 
+The template also has a `max` object, one integer for each key. That integer is the character limit after the phone trims the line. Count the template text, including `{tokens}`, not the words you substitute for them. You may delete `max`. Import ignores it. The app uses the limit compiled into the version that reads the file. A line over that limit is left in English. Save report names each line that was too long.
+
 ## Placeholders
 
 Keep every `{token}` exactly as exported, including the braces and the token name. The same names are required. The order may change. Do not add tokens. Do not use `%s`. A line that breaks this rule is shown in English.
@@ -41,7 +43,9 @@ Stay inside the slot for each key.
 - A dialog or other long sentence is at most three times the English length, and never more than 700 characters.
 - The file is at most 264 KiB.
 
-Count characters after the phone trims the line. A line that is too long is left in English. The confirm dialog counts it. It does not point at the word. A newline is kept only when the English line has one.
+Count characters after the phone trims the line. A line that is too long is left in English. A newline is kept only when the English line has one.
+
+On the import confirm dialog, Save report writes a text file. The headings stay English. It lists the keys that will be used, the keys that are missing, and each line that was too long, with the length and the limit. It also names a blank line, a line with an extra line break, a placeholder that does not match, and a key this version does not have. Send that file with the pack when a line comes back in English. The confirm dialog still shows the counts. Cancel leaves the current language.
 
 For a tab or a class chip, pick a shorter word when the full word would pass 18 characters. A German compound is the usual case.
 
@@ -51,7 +55,7 @@ Leave these words as written: Wi-Fi, Bluetooth, GPS, GNSS, USB, PDF, CSV, ATAK, 
 
 ## After a Fieldwatch update
 
-Import the pack again and read "new since your pack" on the confirm dialog. That count is the keys added after `writtenFor` which this pack does not translate. Export a fresh English template and translate those keys. Leave `writtenFor` as the version of that template.
+Export a fresh English template and translate the lines the file does not have. Import the pack and use Save report. Missing names every key the file lacks. The dialog line "{n} keys are new since your pack." only counts keys added after `writtenFor`. Leave `writtenFor` as the version of that template.
 
 ## What to tell the person who imports the file
 

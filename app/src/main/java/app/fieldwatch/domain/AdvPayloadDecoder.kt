@@ -51,47 +51,32 @@ object AdvPayloadDecoder {
                         val teslaPrefix = DefaultCatalog.TESLA_IBEACON_MFG_PREFIX
                         val targetPrefix = DefaultCatalog.TARGET_ATRIUS_IBEACON_MFG_PREFIX
                         if (hex.startsWith(teslaPrefix) || hex.startsWith(teslaPrefix.drop(4))) {
-                            out += RoleHint(
-                                "vehicle",
-                                "a Tesla vehicle or phone-as-key",
-                                "Tesla phone-key iBeacon UUID (iOS background find).",
-                                8,
-                            )
+                            out += RoleHint("vehicle", tx("explain.tesla"), tx("explain.tesla.why"), 8)
                         } else if (hex.startsWith(targetPrefix) || hex.startsWith(targetPrefix.drop(4))) {
-                            out += RoleHint(
-                                "beacon",
-                                "an Atrius cart tag",
-                                "Atrius cart-tag iBeacon. The advertisement does not name the store.",
-                                8,
-                            )
+                            out += RoleHint("beacon", tx("explain.atrius"), tx("explain.atrius.why"), 8)
                         } else {
-                            out += RoleHint("beacon", "an iBeacon", "Apple iBeacon payload.", 7)
+                            out += RoleHint("beacon", tx("explain.ibeacon"), tx("explain.ibeacon.why"), 7)
                         }
                     }
-                    0x05 -> out += RoleHint("phone", "an iPhone or iPad offering AirDrop", "Apple AirDrop advertisement.", 5)
+                    0x05 -> out += RoleHint("phone", tx("explain.airdrop"), tx("explain.airdrop.why"), 5)
                     0x07 -> {
                         val model = airPodsModel(tlv.data)
                         out += RoleHint(
                             "audio-personal",
-                            model ?: "AirPods or Beats headphones",
-                            if (model != null) "Apple Proximity Pairing: $model."
-                            else "Apple Proximity Pairing (AirPods / Beats).",
+                            model ?: tx("explain.airpods"),
+                            if (model != null) tx("explain.airpods.model", mapOf("model" to model))
+                            else tx("explain.airpods.why"),
                             8,
                         )
                     }
-                    0x08 -> out += RoleHint("siri", "an Apple device that just heard “Hey Siri”", "Hey Siri advertisement.", 6)
-                    0x09 -> out += RoleHint("audio-speaker", "an AirPlay speaker or Apple TV", "AirPlay advertisement.", 5)
-                    0x0B -> out += RoleHint("phone", "an Apple device doing Handoff", "Handoff advertisement.", 4)
-                    0x0C -> out += RoleHint("phone", "an Apple device looking for Instant Hotspot", "Tethering-target advertisement.", 5)
-                    0x0D, 0x0E -> out += RoleHint("hotspot", "an iPhone/iPad offering Instant Hotspot", "Tethering-source advertisement.", 6)
-                    0x0F -> out += RoleHint("phone", "an Apple device (Nearby Action)", nearbyActionReason(tlv.data), 4)
-                    0x10 -> out += RoleHint("phone", "an iPhone / iPad / Mac (Nearby Info)", nearbyInfoReason(tlv.data), 5)
-                    0x12 -> out += RoleHint(
-                        "tag",
-                        "a Find My network radio",
-                        "Apple Offline Finding — AirTag, Find My accessory, or an Apple device locating itself.",
-                        4,
-                    )
+                    0x08 -> out += RoleHint("siri", tx("explain.siri"), tx("explain.siri.why"), 6)
+                    0x09 -> out += RoleHint("audio-speaker", tx("explain.airplay"), tx("explain.airplay.why"), 5)
+                    0x0B -> out += RoleHint("phone", tx("explain.handoff"), tx("explain.handoff.why"), 4)
+                    0x0C -> out += RoleHint("phone", tx("explain.hotspot.look"), tx("explain.hotspot.look.why"), 5)
+                    0x0D, 0x0E -> out += RoleHint("hotspot", tx("explain.hotspot.offer"), tx("explain.hotspot.offer.why"), 6)
+                    0x0F -> out += RoleHint("phone", tx("explain.nearby.action"), nearbyActionReason(tlv.data), 4)
+                    0x10 -> out += RoleHint("phone", tx("explain.nearby.info"), nearbyInfoReason(tlv.data), 5)
+                    0x12 -> out += RoleHint("tag", tx("explain.findmy"), tx("explain.findmy.long"), 4)
                 }
             }
         }
@@ -102,18 +87,19 @@ object AdvPayloadDecoder {
                     if (bytes.size == 3) {
                         val id = modelId24(bytes)
                         val name = FastPairModels.name(id)
+                        val idHex = "0x%06X".format(id)
                         out += RoleHint(
                             "audio-personal",
-                            name ?: "a Fast Pair accessory (often earbuds or a speaker)",
-                            if (name != null) "Google Fast Pair model $name (0x%06X), in pairing mode.".format(id)
-                            else "Google Fast Pair model 0x%06X, in pairing mode.".format(id),
+                            name ?: tx("explain.fastpair"),
+                            if (name != null) tx("explain.fastpair.named", mapOf("name" to name, "id" to idHex))
+                            else tx("explain.fastpair.id", mapOf("id" to idHex)),
                             if (name != null) 8 else 6,
                         )
                     } else {
                         out += RoleHint(
                             "audio-personal",
-                            "a Fast Pair accessory already paired to someone",
-                            "Google Fast Pair account-key broadcast (not in pairing mode).",
+                            tx("explain.fastpair.paired"),
+                            tx("explain.fastpair.paired.why"),
                             4,
                         )
                     }
@@ -123,12 +109,11 @@ object AdvPayloadDecoder {
                     when (frame) {
                         0x40, 0x41 -> out += RoleHint(
                             "tag",
-                            "a Google Find Hub tag",
-                            if (frame == 0x41) "Find Hub separated (unwanted-tracking) frame."
-                            else "Find Hub nearby frame.",
+                            tx("explain.findhub"),
+                            if (frame == 0x41) tx("explain.findhub.sep") else tx("explain.findhub.near"),
                             8,
                         )
-                        else -> out += RoleHint("beacon", "an Eddystone beacon", "Eddystone service data.", 6)
+                        else -> out += RoleHint("beacon", tx("explain.eddystone"), tx("explain.eddystone.why"), 6)
                     }
                 }
             }
@@ -400,27 +385,27 @@ object AdvPayloadDecoder {
     }
 
     private fun nearbyActionReason(data: ByteArray): String {
-        val action = if (data.size >= 2) data[1].toInt() and 0xFF else return "Nearby Action advertisement."
-        return "Nearby Action: ${nearbyActionName(action)}."
+        val action = if (data.size >= 2) data[1].toInt() and 0xFF else return tx("explain.near.ad")
+        return tx("explain.near.reason", mapOf("name" to nearbyActionName(action)))
     }
 
     private fun nearbyActionName(action: Int): String = when (action) {
-        0x01 -> "Apple TV setup"
-        0x04 -> "Mobile backup"
-        0x05 -> "Watch setup"
-        0x06 -> "Apple TV pair"
-        0x08 -> "Wi-Fi password sharing (prompting nearby iPhones)"
-        0x09 -> "iOS setup"
-        0x0A -> "Repair"
-        0x0B -> "Speaker setup"
-        0x0C -> "Apple Pay"
-        0x0D -> "Whole-home audio setup"
-        0x0F -> "Answered a call"
-        0x10 -> "Ended a call"
-        0x13 -> "Remote AutoFill"
-        0x14 -> "Companion Link proximity"
-        0x17 -> "Remote display"
-        else -> "action 0x%02X".format(action)
+        0x01 -> tx("explain.near.tv.setup")
+        0x04 -> tx("explain.near.backup")
+        0x05 -> tx("explain.near.watch")
+        0x06 -> tx("explain.near.tv.pair")
+        0x08 -> tx("explain.near.wifi")
+        0x09 -> tx("explain.near.ios")
+        0x0A -> tx("explain.near.repair")
+        0x0B -> tx("explain.near.speaker")
+        0x0C -> tx("explain.near.pay")
+        0x0D -> tx("explain.near.audio")
+        0x0F -> tx("explain.near.answered")
+        0x10 -> tx("explain.near.ended")
+        0x13 -> tx("explain.near.autofill")
+        0x14 -> tx("explain.near.companion")
+        0x17 -> tx("explain.near.display")
+        else -> tx("explain.near.code", mapOf("code" to "0x%02X".format(action)))
     }
 
     private fun decodeNearbyInfo(data: ByteArray): List<Field> {
@@ -465,15 +450,15 @@ object AdvPayloadDecoder {
     }
 
     private fun nearbyInfoReason(data: ByteArray): String {
-        if (data.isEmpty()) return "Nearby Info advertisement."
+        if (data.isEmpty()) return tx("explain.info.ad")
         val action = data[0].toInt() and 0x0F
         return when (action) {
-            0x03 -> "Phone is idle / locked."
-            0x05 -> "Audio playing with the screen locked."
-            0x07 -> "Screen is on — someone is using it."
-            0x0D -> "Device reports the user is driving."
-            0x0E -> "In a phone or FaceTime call."
-            else -> "Nearby Info advertisement."
+            0x03 -> tx("explain.info.idle")
+            0x05 -> tx("explain.info.audio")
+            0x07 -> tx("explain.info.screen")
+            0x0D -> tx("explain.info.driving")
+            0x0E -> tx("explain.info.call")
+            else -> tx("explain.info.ad")
         }
     }
 
@@ -642,6 +627,10 @@ object AdvPayloadDecoder {
             else -> null
         }
     }
+
+    private fun tx(key: String) = LanguageText.text(key)
+
+    private fun tx(key: String, values: Map<String, String>) = LanguageText.text(key, values)
 
     private fun hexToBytes(hex: String): ByteArray? {
         val h = hex.filter { it.isLetterOrDigit() }

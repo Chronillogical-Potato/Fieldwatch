@@ -114,11 +114,13 @@ enum class TakBirth {
     ETHERNET,
 }
 
+/** Wi-Fi or Ethernet can deliver same-phone CoT. Cellular alone cannot. */
+fun samePhoneReachesAtak(birth: TakBirth): Boolean =
+    birth == TakBirth.WIFI || birth == TakBirth.ETHERNET
+
 /** Diagnostics facts for the same-phone socket. No host address. */
 data class TakLoopbackFacts(
     val open: Boolean = false,
-    val pinned: Boolean = false,
-    val bindError: String? = null,
     val birth: TakBirth? = null,
     val lastSendOk: Boolean? = null,
 )
@@ -941,6 +943,31 @@ object CotEvent {
             append("<fillColor value=\"1090453759\"/>")
             append("<labels_on value=\"true\"/>")
         },
+    )
+
+    /** Trusted-network pin. Not the phone marker and not a heard radio. */
+    fun twinXml(
+        uid: String,
+        lat: Double,
+        lon: Double,
+        now: Long,
+        callsign: String,
+        remarks: String,
+        staleMs: Long,
+    ): String = eventXml(
+        uid = uid,
+        cotType = "a-n-G",
+        lat = lat,
+        lon = lon,
+        hae = 9999999.0,
+        callsign = xmlEscape(callsign),
+        remarks = xmlEscape(remarks),
+        group = "Green",
+        now = now,
+        staleMs = staleMs,
+        staleNow = false,
+        linkUid = null,
+        linkType = null,
     )
 
     fun tombstoneXml(

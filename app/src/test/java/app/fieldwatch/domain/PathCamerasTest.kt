@@ -79,7 +79,7 @@ class PathCamerasTest {
         val plain = DebriefReport.document(
             devices = emptyList(),
             fleets = emptyList(),
-            settings = AppSettings(tagLocation = true),
+            settings = layersOn(),
             operatorPath = listOf(GpsSample(now - 1_000L, lat, lon)),
             now = now,
             window = DebriefWindow(now - 60_000L, now, "drive"),
@@ -88,7 +88,7 @@ class PathCamerasTest {
         val withCameras = DebriefReport.document(
             devices = emptyList(),
             fleets = emptyList(),
-            settings = AppSettings(tagLocation = true),
+            settings = layersOn(),
             operatorPath = listOf(GpsSample(now - 1_000L, lat, lon)),
             now = now,
             window = DebriefWindow(now - 60_000L, now, "drive"),
@@ -115,13 +115,64 @@ class PathCamerasTest {
         val doc = DebriefReport.document(
             devices = emptyList(),
             fleets = emptyList(),
-            settings = AppSettings(tagLocation = true),
+            settings = layersOn(),
             operatorPath = path,
             now = now,
             window = DebriefWindow(now - 60_000L, now, "drive"),
             cameras = PathCameras.Report(plates = true, others = true, near = nearby(listOf(flock, away))),
         )
         assertEquals(listOf(1L), doc.pathFigure?.cameras?.map { it.key })
+    }
+
+    @Test
+    fun theSitReportLeavesOffAListWhoseSwitchIsOff() {
+        val now = 1_700_000_000_000L
+        val path = listOf(
+            GpsSample(now - 2_000L, lat, lon),
+            GpsSample(now - 1_000L, north(lat, 80.0), lon),
+        )
+        val flock = camera(1L, north(lat, 40.0), east(lat, lon, 15.0), listOf(270), flock = true)
+        val speed = camera(6L, north(lat, 40.0), east(lat, lon, -20.0), listOf(90), kind = SensorKind.SPEED)
+        val saved = PathCameras.Report(plates = true, others = true, near = nearby(listOf(flock, speed)))
+        val hidden = DebriefReport.document(
+            devices = emptyList(),
+            fleets = emptyList(),
+            settings = AppSettings(tagLocation = true),
+            operatorPath = path,
+            now = now,
+            window = DebriefWindow(now - 60_000L, now, "drive"),
+            cameras = saved,
+        )
+        assertTrue(hidden.sections.none { it.title == "Known cameras on path" })
+        assertTrue(hidden.pathFigure?.cameras.orEmpty().isEmpty())
+        val platesOnly = DebriefReport.document(
+            devices = emptyList(),
+            fleets = emptyList(),
+            settings = AppSettings(tagLocation = true, flockLayer = true),
+            operatorPath = path,
+            now = now,
+            window = DebriefWindow(now - 60_000L, now, "drive"),
+            cameras = saved,
+        )
+        val section = platesOnly.sections.single { it.title == "Known cameras on path" }
+        assertTrue(section.body.contains("Flock"))
+        assertFalse(section.body.contains("Speed cameras"))
+        assertFalse(section.body.contains("not on this phone"))
+        assertEquals(listOf(1L), platesOnly.pathFigure?.cameras?.map { it.key })
+        val missingPlates = DebriefReport.document(
+            devices = emptyList(),
+            fleets = emptyList(),
+            settings = AppSettings(tagLocation = true, flockLayer = true),
+            operatorPath = path,
+            now = now,
+            window = DebriefWindow(now - 60_000L, now, "drive"),
+            cameras = PathCameras.Report(plates = false, others = true, near = nearby(listOf(speed))),
+        )
+        val named = missingPlates.sections.single { it.title == "Known cameras on path" }
+        assertTrue(named.body.contains("The plate-reader list is not on this phone."))
+        assertFalse(named.body.contains("The other-camera list is not on this phone."))
+        assertFalse(named.body.contains("Speed cameras"))
+        assertTrue(missingPlates.pathFigure?.cameras.orEmpty().isEmpty())
     }
 
     @Test
@@ -147,6 +198,8 @@ class PathCamerasTest {
         assertEquals(listOf("ui.cameras.kind.speed"), noPlateFile.counts.map { it.labelKey })
         assertEquals(listOf(6L), noPlateFile.cameras.map { it.key })
     }
+
+    private fun layersOn() = AppSettings(tagLocation = true, flockLayer = true, sensorLayer = true)
 
     private fun nearby(cameras: List<FlockCamera>): (Double, Double, Double) -> List<FlockCamera> =
         { lat, lon, radius ->

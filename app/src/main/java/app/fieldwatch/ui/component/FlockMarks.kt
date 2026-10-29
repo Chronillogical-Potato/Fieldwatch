@@ -27,21 +27,10 @@ fun DrawScope.drawFlockMarks(
     countStyle: TextStyle,
     /** Sit path and the live list map. Larger, with a light ring, so they read on the blue drive line. */
     bold: Boolean = false,
+    /** Marks already chosen for this picture. Null asks the index for the same set. */
+    prepared: List<FlockMark>? = null,
 ) {
-    val box = flockBox(lay) ?: return
-    val marks = index.marks(
-        box.south,
-        box.north,
-        box.west,
-        box.east,
-        project = { lat, lon ->
-            val pt = lay.project(lat, lon)
-            pt.x to pt.y
-        },
-        inside = { x, y ->
-            x in lay.plotLeft..lay.plotRight && y in lay.plotTop..lay.plotBottom
-        },
-    )
+    val marks = prepared ?: flockMarksOn(lay, index)
     val metersPerPx = lay.metersPerPx.coerceAtLeast(0.05f)
     for (mark in marks) {
         val pt = lay.project(mark.lat, mark.lon)
@@ -229,6 +218,24 @@ private val CamGlow = Color(0xFF64748B).copy(alpha = 0.45f)
 private val CamCore = Color(0xFFCBD5E1)
 
 private data class FlockBox(val south: Double, val north: Double, val west: Double, val east: Double)
+
+/** The marks [drawFlockMarks] paints for this picture. Hit testing uses this list. */
+fun flockMarksOn(lay: SitPathPlot.Layout, index: FlockIndex): List<FlockMark> {
+    val box = flockBox(lay) ?: return emptyList()
+    return index.marks(
+        box.south,
+        box.north,
+        box.west,
+        box.east,
+        project = { lat, lon ->
+            val pt = lay.project(lat, lon)
+            pt.x to pt.y
+        },
+        inside = { x, y ->
+            x in lay.plotLeft..lay.plotRight && y in lay.plotTop..lay.plotBottom
+        },
+    )
+}
 
 private fun flockBox(lay: SitPathPlot.Layout): FlockBox? {
     if (lay.plotRight <= lay.plotLeft || lay.plotBottom <= lay.plotTop) return null

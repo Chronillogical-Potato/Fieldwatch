@@ -55,7 +55,9 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -65,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +77,13 @@ import app.fieldwatch.domain.MapFooter
 import app.fieldwatch.domain.MapFrame
 import app.fieldwatch.domain.SignatureClass
 import app.fieldwatch.domain.SitPathPlot
+import app.fieldwatch.domain.cameraAt
+import app.fieldwatch.domain.cameraBrand
+import app.fieldwatch.domain.cameraCard
+import app.fieldwatch.domain.cameraId
+import app.fieldwatch.domain.cameraWinsTap
+import app.fieldwatch.domain.camerasOnSpot
+import app.fieldwatch.domain.cardAnchor
 import app.fieldwatch.ui.ClassGlyphs
 import app.fieldwatch.ui.RadioClassBadge
 import app.fieldwatch.ui.theme.Cyan
@@ -171,6 +181,9 @@ fun SitPathCanvas(
     var boxSize by remember { mutableStateOf(IntSize.Zero) }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var selectedGnss by remember { mutableStateOf<String?>(null) }
+    var selectedCamera by remember { mutableStateOf<String?>(null) }
+    var placedCard by remember { mutableStateOf<MapCardBox?>(null) }
+    var boxInWindow by remember { mutableStateOf(Offset.Zero) }
     val appliedCourse = if (onRotate == null) {
         Double.NaN
     } else {
@@ -203,6 +216,16 @@ fun SitPathCanvas(
     LaunchedEffect(layout) {
         val window = layout?.tileWindow() ?: return@LaunchedEffect
         onTileWindowRef.value?.invoke(window)
+    }
+    val cameraIndex = when {
+        alongIndex != null -> if (pathCameras.isNullOrEmpty()) null else alongIndex
+        flockGen >= 0 -> flockIndex
+        else -> null
+    }
+    val cameraMarks = remember(layout, cameraIndex, flockGen) {
+        val lay = layout
+        val index = cameraIndex
+        if (lay == null || index == null) emptyList() else flockMarksOn(lay, index)
     }
     val clusters = remember(layout, model) {
         val lay = layout
@@ -244,15 +267,60 @@ fun SitPathCanvas(
     } else {
         8.dp
     }
+    fun mapCard(key: String, minWidth: Dp = 0.dp): Modifier {
+        return Modifier
+            .widthIn(min = minWidth, max = 248.dp)
+            .onGloballyPositioned { coords ->
+                val origin = coords.positionInWindow() - boxInWindow
+                val w = coords.size.width.toFloat()
+                val h = coords.size.height.toFloat()
+                placedCard = MapCardBox(key, origin.x, origin.y, origin.x + w, origin.y + h)
+            }
+            .background(surface, RoundedCornerShape(8.dp))
+            .border(1.dp, outline, RoundedCornerShape(8.dp))
+            .padding(8.dp)
+    }
     fun handleTap(pos: Offset) {
         val lay = layout
         val gnssHit = if (lay == null) emptyList() else gnssAt(model.gnss, lay, pos.x, pos.y)
         val radio = SitPathPlot.clusterAt(clusters, pos.x, pos.y, markers)
+        val cam = if (lay == null) {
+            null
+        } else {
+            cameraAt(cameraMarks, pos.x, pos.y) { lat, lon ->
+                val pt = lay.project(lat, lon)
+                pt.x to pt.y
+            }
+        }
         val gnssD = gnssHit.minOfOrNull { pin ->
             val pt = lay!!.project(pin.lat, pin.lon)
             hypot(pt.x - pos.x, pt.y - pos.y)
         }
         val radioD = radio?.let { hypot(it.center.x - pos.x, it.center.y - pos.y) }
+        val camD = if (cam == null || lay == null) {
+            null
+        } else {
+            val pt = lay.project(cam.lat, cam.lon)
+            hypot(pt.x - pos.x, pt.y - pos.y)
+        }
+        if (cam != null && camD != null && cameraWinsTap(camD, gnssD, radioD)) {
+            val id = cameraId(cam)
+            val open = selectedCamera
+            val anchor = if (open == null) null else cameraMarks.firstOrNull { cameraId(it) == open }
+            val openIds = if (anchor == null) {
+                emptySet()
+            } else {
+                camerasOnSpot(cameraMarks, anchor) { lat, lon ->
+                    val pt = lay!!.project(lat, lon)
+                    pt.x to pt.y
+                }.map { cameraId(it) }.toSet()
+            }
+            selectedCamera = if (id == open || id in openIds) null else id
+            selectedGnss = null
+            selectedId = null
+            return
+        }
+        selectedCamera = null
         val pickGnss = gnssHit.isNotEmpty() && (radioD == null || gnssD!! <= radioD)
         if (pickGnss) {
             val id = gnssHit.joinToString("|") { gnssId(it) }
@@ -270,8 +338,8 @@ fun SitPathCanvas(
     tapRef.value = { handleTap(it) }
     val frame = if (expand) Modifier.fillMaxSize() else Modifier.fillMaxWidth().height(240.dp)
     val gestures = if (onViewport == null) {
-        Modifier.pointerInput(clusters, markers, layout, model.gnss) {
-            detectTapGestures { handleTap(it) }
+        Modifier.pointerInput(Unit) {
+            detectTapGestures { tapRef.value(it) }
         }
     } else {
         Modifier.pointerInput(Unit) {
@@ -324,7 +392,10 @@ fun SitPathCanvas(
         }
     }
     Box(
-        modifier.then(frame.onSizeChanged { boxSize = it }),
+        modifier
+            .then(frame)
+            .onSizeChanged { boxSize = it }
+            .onGloballyPositioned { boxInWindow = it.positionInWindow() },
     ) {
         Canvas(
             Modifier
@@ -338,11 +409,6 @@ fun SitPathCanvas(
                 (x + dx).coerceIn(lay.pictureLeft, (lay.pictureRight - textW).coerceAtLeast(lay.pictureLeft)),
                 (y + dy).coerceIn(lay.pictureTop, (lay.pictureBottom - textH).coerceAtLeast(lay.pictureTop)),
             )
-            val markIndex = when {
-                alongIndex != null -> if (pathCameras.isNullOrEmpty()) null else alongIndex
-                flockGen >= 0 -> flockIndex
-                else -> null
-            }
             clipRect(lay.plotLeft, lay.plotTop, lay.plotRight, lay.plotBottom) {
                 drawMapTiles(tiles, lay.project, alpha = 0.55f)
             }
@@ -416,15 +482,16 @@ fun SitPathCanvas(
                 }
                 drawAdvertised(lay, model.craft, model.pilots, model.dots, pilotPainter)
             }
-            if (markIndex != null) {
+            if (cameraMarks.isNotEmpty() && cameraIndex != null) {
                 clipRect(lay.plotLeft, lay.plotTop, lay.plotRight, lay.plotBottom) {
                     drawFlockMarks(
                         lay,
-                        markIndex,
+                        cameraIndex,
                         night,
                         measurer,
                         flockCountStyle,
                         bold = alongIndex != null || expand,
+                        prepared = cameraMarks,
                     )
                 }
             }
@@ -456,18 +523,29 @@ fun SitPathCanvas(
                     drawGnssDiamond(Offset(pt.x, pt.y), gnssInk)
                 }
             }
-            if (selected != null && onMap(selected.center.x, selected.center.y)) {
-                val insetOnRight = selected.center.x < size.width / 2f
-                val dest = Offset(
-                    if (insetOnRight) size.width - 12f else 12f,
-                    28f,
-                )
-                drawLine(
-                    outline,
-                    Offset(selected.center.x, selected.center.y),
-                    dest,
-                    strokeWidth = 2f,
-                )
+            val camPick = if (selected == null && selectedGnss == null) {
+                cameraMarks.firstOrNull { cameraId(it) == selectedCamera }
+            } else {
+                null
+            }
+            val leader = if (selected != null && onMap(selected.center.x, selected.center.y)) {
+                Offset(selected.center.x, selected.center.y)
+            } else if (camPick != null) {
+                val pt = lay.project(camPick.lat, camPick.lon)
+                if (onMap(pt.x, pt.y)) Offset(pt.x, pt.y) else null
+            } else {
+                null
+            }
+            val cardKey = when {
+                selected != null -> "r:${selected.id}"
+                selectedGnss != null -> "g:$selectedGnss"
+                camPick != null -> "c:${cameraId(camPick)}"
+                else -> null
+            }
+            val box = placedCard
+            if (leader != null && box != null && cardKey != null && box.key == cardKey) {
+                val (ex, ey) = cardAnchor(leader.x, leader.y, box.left, box.top, box.right, box.bottom)
+                drawLine(outline, leader, Offset(ex, ey), strokeWidth = 2f)
             }
             val barW = (size.width - 32f) * lay.scaleBarFrac
             val barLabel = scaleLabel(lay.scaleBarM)
@@ -557,10 +635,7 @@ fun SitPathCanvas(
                 Modifier
                     .align(if (onRight) Alignment.TopEnd else Alignment.TopStart)
                     .padding(start = 8.dp, top = cardTop(onRight), end = 8.dp, bottom = 8.dp)
-                    .widthIn(max = 248.dp)
-                    .background(surface, RoundedCornerShape(8.dp))
-                    .border(1.dp, outline, RoundedCornerShape(8.dp))
-                    .padding(8.dp),
+                    .then(mapCard("g:$selectedGnss")),
             ) {
                 Text(
                     if (gnssCard.size == 1) LanguageText.text("ui.gnss.detection") else "${gnssCard.size} GNSS detections",
@@ -590,16 +665,8 @@ fun SitPathCanvas(
             Column(
                 Modifier
                     .align(if (onRight) Alignment.TopEnd else Alignment.TopStart)
-                    .padding(
-                        start = 8.dp,
-                        top = cardTop(onRight),
-                        end = 8.dp,
-                        bottom = 8.dp,
-                    )
-                    .widthIn(max = 248.dp)
-                    .background(surface, RoundedCornerShape(8.dp))
-                    .border(1.dp, outline, RoundedCornerShape(8.dp))
-                    .padding(8.dp),
+                    .padding(start = 8.dp, top = cardTop(onRight), end = 8.dp, bottom = 8.dp)
+                    .then(mapCard("r:${selected.id}")),
             ) {
                 Text(
                     if (model.live) {
@@ -651,6 +718,54 @@ fun SitPathCanvas(
                     }
                 }
             }
+        } else {
+            val picked = cameraMarks.firstOrNull { cameraId(it) == selectedCamera }
+            val index = cameraIndex
+            val lay = layout
+            if (picked != null && index != null && lay != null) {
+                val group = camerasOnSpot(cameraMarks, picked) { lat, lon ->
+                    val pt = lay.project(lat, lon)
+                    pt.x to pt.y
+                }
+                val anchor = lay.project(picked.lat, picked.lon)
+                val onRight = anchor.x < (boxSize.width / 2f)
+                Column(
+                    Modifier
+                        .align(if (onRight) Alignment.TopEnd else Alignment.TopStart)
+                        .padding(start = 8.dp, top = cardTop(onRight), end = 8.dp, bottom = 8.dp)
+                        .then(mapCard("c:${cameraId(picked)}", minWidth = 168.dp)),
+                ) {
+                    group.forEachIndexed { i, mark ->
+                        if (i > 0) Spacer(Modifier.height(8.dp))
+                        val card = cameraCard(mark, cameraBrand(index, mark))
+                        val kind = LanguageText.text(card.kindKey)
+                        Text(kind, style = MaterialTheme.typography.labelSmall, color = muted)
+                        if (card.count > 1) {
+                            Text(
+                                card.count.toString(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = track,
+                            )
+                        }
+                        if (card.brand.isNotBlank() && !card.brand.equals(kind, ignoreCase = true)) {
+                            Text(
+                                card.brand,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = track,
+                                maxLines = 2,
+                            )
+                        }
+                        if (card.facing.isNotBlank()) {
+                            Text(
+                                LanguageText.text("ui.map.camera.facing", mapOf("dir" to card.facing)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = track,
+                                maxLines = 2,
+                            )
+                        }
+                    }
+                }
+            }
         }
         if (showRecenter) {
             TextButton(
@@ -695,6 +810,14 @@ private fun moveLiveCamera(
     viewportRef.value = next
     onViewportRef.value?.invoke(next)
 }
+
+private data class MapCardBox(
+    val key: String,
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float,
+)
 
 internal val AircraftAmber = Color(0xFFC47A00)
 

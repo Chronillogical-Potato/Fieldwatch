@@ -31,6 +31,7 @@ object DebriefPrompt {
         gnss: List<GnssMark> = emptyList(),
         placeRecords: List<PlaceMemory.Record> = emptyList(),
         cameras: PathCameras.Report? = null,
+        trusted: List<TrustedSitLine> = emptyList(),
     ): String {
         val names = fleets.associate { it.id to it.name }
         val win = window ?: DebriefWindow(now - WINDOW_MS, now)
@@ -70,6 +71,7 @@ object DebriefPrompt {
             gnss = gnss,
             placeRecords = placeRecords,
             cameras = cameras,
+            trusted = trusted,
         )
         val iso = utc(windowEnd)
         val start = utc(windowStart)

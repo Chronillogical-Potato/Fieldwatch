@@ -13,8 +13,11 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.io.StringReader
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import javax.net.ssl.SSLHandshakeException
 
 class FlockCamerasTest {
     @Test
@@ -335,6 +338,26 @@ class FlockCamerasTest {
     }
 
     @Test
+    fun aFailedDownloadNamesTheCause() {
+        assertEquals(FlockFiles.Reason.REACH, FlockFiles.failReason(UnknownHostException("list")))
+        assertEquals(FlockFiles.Reason.REACH, FlockFiles.failReason(SocketTimeoutException("timed out")))
+        assertEquals(FlockFiles.Reason.TRUST, FlockFiles.failReason(SSLHandshakeException("bad cert")))
+        assertEquals(FlockFiles.Reason.OTHER, FlockFiles.failReason(IllegalStateException("other")))
+    }
+
+    @Test
+    fun aBrokenCameraFileReadsAsNothing() {
+        val dir = tempDir()
+        val junk = byteArrayOf(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        FlockFiles.file(dir, SensorList.PLATES).writeBytes(junk)
+        FlockFiles.file(dir, SensorList.OTHER).writeBytes(junk)
+        assertNull(FlockFiles.peek(dir, SensorList.PLATES))
+        assertNull(FlockFiles.read(dir, SensorList.PLATES))
+        assertNull(FlockFiles.peek(dir, SensorList.OTHER))
+        assertNull(FlockFiles.read(dir, SensorList.OTHER))
+    }
+
+    @Test
     fun aBadDownloadDoesNotReplaceAGoodFile() {
         val dir = tempDir()
         val raw = platesJson(FlockApproach.MIN_COUNT)
@@ -399,6 +422,86 @@ class FlockCamerasTest {
         assertEquals(SensorKind.PLATE, old.cameras.first().kind)
         assertTrue(old.cameras.first().flock)
         assertFalse(FlockFiles.peek(flockOnly)!!.version >= FlockFiles.ALL_PLATES)
+    }
+
+    @Test
+    fun tapReadsTheClosestCameraAndLeavesATieToTheDetection() {
+        val speed = FlockMark(39.0, -104.0, 1, listOf(0), kind = SensorKind.SPEED)
+        val red = FlockMark(39.1, -104.0, 1, emptyList(), kind = SensorKind.RED)
+        fun project(lat: Double, lon: Double) = (lat * 1000.0).toFloat() to (lon * 1000.0).toFloat()
+        assertEquals(SensorKind.SPEED, cameraAt(listOf(speed, red), 39020f, -104000f, project = ::project)?.kind)
+        assertNull(cameraAt(listOf(speed), 39050f, -104000f, project = ::project))
+        assertEquals(SensorKind.SPEED, cameraAt(listOf(speed), 39040f, -104000f, project = ::project)?.kind)
+        val same = FlockMark(1.0, 2.0, 1, emptyList(), kind = SensorKind.RED)
+        assertEquals(
+            SensorKind.SPEED,
+            cameraAt(listOf(speed, same), 0f, 0f) { _, _ -> 10f to 0f }?.kind,
+        )
+        assertFalse(cameraWinsTap(10f, 10f, null))
+        assertFalse(cameraWinsTap(10f, null, 10f))
+        assertFalse(cameraWinsTap(9f, 10f, 12f))
+        assertTrue(cameraWinsTap(10f, 30f, null))
+        assertTrue(cameraWinsTap(4f, null, null))
+    }
+
+    @Test
+    fun camerasOnTheSameSpotShareOneCard() {
+        val speed = FlockMark(0.0, 0.0, 1, emptyList(), kind = SensorKind.SPEED)
+        val red = FlockMark(0.0, 0.0001, 1, listOf(90), kind = SensorKind.RED)
+        val far = FlockMark(1.0, 1.0, 1, emptyList(), kind = SensorKind.GUNSHOT)
+        fun project(lat: Double, lon: Double) = when {
+            lat == 0.0 && lon == 0.0 -> 100f to 100f
+            lat == 0.0 -> 112f to 108f
+            else -> 400f to 400f
+        }
+        val spot = camerasOnSpot(listOf(far, red, speed), speed, project = ::project)
+        assertEquals(listOf(SensorKind.SPEED, SensorKind.RED), spot.map { it.kind })
+        assertEquals(listOf(SensorKind.GUNSHOT), camerasOnSpot(listOf(far, speed), far, project = ::project).map { it.kind })
+        assertEquals(100f to 40f, cardAnchor(10f, 40f, 100f, 20f, 260f, 90f))
+        assertEquals(100f to 20f, cardAnchor(10f, 4f, 100f, 20f, 260f, 90f))
+        assertEquals(150f to 40f, cardAnchor(150f, 40f, 100f, 20f, 260f, 90f))
+    }
+
+    @Test
+    fun cameraCardNamesOneSensorAndCountsACrowd() {
+        val flock = FlockMark(1.0, 2.0, 1, listOf(0, 90), flock = true, kind = SensorKind.PLATE)
+        val card = cameraCard(flock, "Flock Safety")
+        assertEquals("ui.cameras.kind.flock", card.kindKey)
+        assertEquals("Flock Safety", card.brand)
+        assertEquals("N, E", card.facing)
+        val crowd = flock.copy(count = 4, facings = listOf(0))
+        val piled = cameraCard(crowd, "Flock Safety")
+        assertEquals("settings.layer.flock", piled.kindKey)
+        assertEquals("", piled.brand)
+        assertEquals("", piled.facing)
+        assertEquals(4, piled.count)
+        val gun = cameraCard(FlockMark(0.0, 0.0, 1, emptyList(), kind = SensorKind.GUNSHOT), "Nope")
+        assertEquals("ui.cameras.kind.gun", gun.kindKey)
+        assertEquals("", gun.facing)
+        val other = cameraCard(FlockMark(0.0, 0.0, 1, emptyList(), kind = SensorKind.PLATE), "Vigilant")
+        assertEquals("ui.cameras.kind.plate", other.kindKey)
+        assertEquals("N", compassPoint(0))
+        assertEquals("N", compassPoint(22))
+        assertEquals("NE", compassPoint(23))
+        assertEquals("NW", compassPoint(337))
+        assertEquals("N", compassPoint(338))
+        assertEquals("S", compassPoint(180))
+        assertEquals("N", compassPoint(-10))
+        val index = FlockIndex()
+        index.replace(
+            listOf(
+                FlockCamera(1L, 39.0, -104.0, listOf(90), brand = "Near", kind = SensorKind.SPEED),
+                FlockCamera(2L, 39.0001, -104.0, listOf(0), brand = "Farther", kind = SensorKind.SPEED),
+                FlockCamera(3L, 39.0, -104.0, emptyList(), brand = "Red Co", kind = SensorKind.RED),
+                FlockCamera(4L, 39.0, -104.0, listOf(90), brand = "Flock Safety", flock = true),
+                FlockCamera(5L, 39.0, -104.0, listOf(90), brand = "Vigilant"),
+            ),
+        )
+        val aimed = FlockMark(39.0, -104.0, 1, listOf(90), kind = SensorKind.SPEED)
+        assertEquals("Near", cameraBrand(index, aimed))
+        assertEquals("", cameraBrand(index, aimed.copy(count = 3)))
+        val plate = FlockMark(39.0, -104.0, 1, listOf(90), flock = true, kind = SensorKind.PLATE)
+        assertEquals("Flock Safety", cameraBrand(index, plate))
     }
 
     @Test

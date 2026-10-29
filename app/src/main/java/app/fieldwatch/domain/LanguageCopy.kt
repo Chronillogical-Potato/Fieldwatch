@@ -76,6 +76,13 @@ object LanguageExportCopy {
     const val FAILED = "Could not export the English template"
 }
 
+/** Import report. Compiled, like the author guide, so the file a translator reads stays English. */
+object LanguageReportCopy {
+    const val SHARE = "Fieldwatch language pack report"
+    const val FAILED = "Could not save the language report"
+    const val FILE = "fieldwatch-language-report.txt"
+}
+
 /** First-run import door. English, compiled, not pack keys. */
 object LanguageDoorCopy {
     const val TITLE = "Fieldwatch is in English"
@@ -93,7 +100,7 @@ object EnglishCopy {
     const val FORMAT = "fieldwatch-language"
     const val FORMAT_VERSION = 1
 
-    val lines: List<EnglishLine> = buildLines() + ChromeLines.all
+    val lines: List<EnglishLine> = buildLines() + ChromeLines.all + CoverageLines.all
     val byKey: Map<String, EnglishLine> = lines.associateBy { it.key }
     val placeholders: Map<String, Set<String>> = lines.associate { it.key to placeholderNames(it.text) }
 
@@ -214,11 +221,11 @@ private fun buildLines(): List<EnglishLine> = listOf(
     en("settings.topic.maps", "Maps", LanguageSlot.CONTROL),
     en("settings.map.choice", "Map", LanguageSlot.CONTROL),
     en("settings.map.overlays", "Overlays", LanguageSlot.CONTROL),
-    en("settings.layer.heading", "Layers", LanguageSlot.CONTROL),
+    en("settings.layer.heading", "Known cameras", LanguageSlot.CONTROL),
     en("settings.layer.flock", "License plate reader cameras", LanguageSlot.CONTROL),
-    en("settings.layer.note", "License plate reader cameras on the map. The alert is below.", LanguageSlot.BODY),
+    en("settings.layer.note", "License plate readers on the map. The voice alert for this list is under the switch.", LanguageSlot.BODY),
     en("settings.layer.other", "Other sensors", LanguageSlot.CONTROL),
-    en("settings.layer.other.note", "Speed cameras, red lights, gunshot detectors, and other cameras. Alerts for each type are below.", LanguageSlot.BODY),
+    en("settings.layer.other.note", "Speed cameras, red lights, gunshot detectors, and other cameras. The voice alert for each type is under the switch.", LanguageSlot.BODY),
     en("settings.layer.alert", "Alert when ahead", LanguageSlot.CONTROL),
     en("settings.layer.alerts", "Voice Alerts", LanguageSlot.CONTROL),
     en("settings.layer.alert.plate", "Alert for plate readers", LanguageSlot.CONTROL),
@@ -239,6 +246,22 @@ private fun buildLines(): List<EnglishLine> = listOf(
     en("settings.layer.current", "This layer is already up to date.", LanguageSlot.BODY),
     en("settings.layer.failed.keep", "The download did not work. The saved copy is unchanged.", LanguageSlot.BODY),
     en("settings.layer.failed.first", "The download did not work.", LanguageSlot.BODY),
+    en("settings.layer.failed.reach", "The phone could not reach the list. Check the connection and try again.", LanguageSlot.BODY),
+    en("settings.layer.failed.trust", "The connection was not trusted.", LanguageSlot.BODY),
+    en("settings.layer.failed.server", "The server did not send the list.", LanguageSlot.BODY),
+    en("settings.layer.failed.server.code", "The server did not send the list ({code}).", LanguageSlot.BODY),
+    en("settings.layer.failed.space", "This phone does not have enough free space for the list.", LanguageSlot.BODY),
+    en("settings.layer.failed.large", "The list is too big to save on this phone.", LanguageSlot.BODY),
+    en("settings.layer.failed.empty", "The server sent an empty list.", LanguageSlot.BODY),
+    en("settings.layer.failed.read", "The list could not be read.", LanguageSlot.BODY),
+    en("settings.layer.failed.save", "The list could not be saved on this phone.", LanguageSlot.BODY),
+    en("settings.layer.failed.unchanged", "The saved copy is unchanged.", LanguageSlot.BODY),
+    en("import.failed.save", "That could not be saved on this phone. What you already have is unchanged.", LanguageSlot.BODY),
+    en("import.failed.kept", "This phone was not changed.", LanguageSlot.BODY),
+    en("catalog.failed.server", "GitHub did not send the catalog.", LanguageSlot.BODY),
+    en("catalog.failed.server.code", "GitHub did not send the catalog ({code}).", LanguageSlot.BODY),
+    en("catalog.failed.empty", "GitHub sent an empty catalog.", LanguageSlot.BODY),
+    en("catalog.failed.read", "The catalog could not be read.", LanguageSlot.BODY),
     en("settings.layer.saved", "Saved {date}", LanguageSlot.CONTROL),
     en("settings.layer.channel", "Map layer alerts", LanguageSlot.CONTROL),
     en("settings.layer.channel.body", "Known mapped cameras, not detected signals.", LanguageSlot.BODY),
@@ -288,19 +311,20 @@ private fun buildLines(): List<EnglishLine> = listOf(
     en("map.key.rejected.body", "The map service did not accept this key. Check the key and that the account allows this app.", LanguageSlot.BODY),
     en("map.key.failed.title", "Map did not load", LanguageSlot.BODY),
     en("map.key.failed.body", "Check the key and that this phone can reach the internet.", LanguageSlot.BODY),
-    en("settings.map.about", "Show live path, Reports → Path, and the path figure use this map. OpenStreetMap covers the world. USGS and FAA maps cover the United States. A map marked Key needs a key from that service. The key stays on this phone.", LanguageSlot.BODY),
+    en("settings.map.about", "Show map with live path, Reports → Path, and the path figure use this map. OpenStreetMap covers the world. USGS and FAA maps cover the United States. A map marked Key needs a key from that service. The key stays on this phone.", LanguageSlot.BODY),
     en("settings.map.needs.online", "Turn on Online place names and maps to load a map.", LanguageSlot.BODY),
     en("settings.map.clear", "Clear saved maps", LanguageSlot.CONTROL),
     en(
         "settings.map.clear.body",
-        "Deletes map pictures. Sensors stay. Loads again.",
-        LanguageSlot.CONTROL,
+        "Deletes saved map pictures. The camera lists stay. The map loads again when you open it.",
+        LanguageSlot.BODY,
     ),
-    en("settings.map.position", "Position", LanguageSlot.CONTROL),
+    en("settings.map.display", "Display location on map", LanguageSlot.CONTROL),
+    en("settings.map.position", "Corner readout", LanguageSlot.CONTROL),
     en("map.position.gps", "GPS", LanguageSlot.CONTROL),
     en(
         "settings.map.position.about",
-        "Where this phone is now, on the lower left of the map.",
+        "Lower left of the map, where this phone is now. {gps} shows coordinates. {grid} shows the MGRS grid. {off} hides it.",
         LanguageSlot.BODY,
     ),
     en("settings.named.radios", "Named radios", LanguageSlot.CONTROL),
@@ -398,6 +422,8 @@ private fun buildLines(): List<EnglishLine> = listOf(
     en("language.confirm.change", "{n} lines will change.", LanguageSlot.BODY),
     en("language.confirm.stay", "{n} lines will stay English.", LanguageSlot.BODY),
     en("language.confirm.ignored", "{n} lines in the file were ignored.", LanguageSlot.BODY),
+    en("language.report.save", "Save report", LanguageSlot.CONTROL),
+    en("language.report.failed", "Could not save the language report", LanguageSlot.BODY),
     en("language.confirm.new", "{n} keys are new since your pack.", LanguageSlot.BODY),
     en(
         "language.confirm.newer",
@@ -455,7 +481,7 @@ private fun buildLines(): List<EnglishLine> = listOf(
     en("rule.hidden.ssid", "Matches hidden SSIDs", LanguageSlot.CONTROL),
     en("rule.hidden.label", "Hidden SSID", LanguageSlot.CONTROL),
     en("display.rssi", "RSSI bars", LanguageSlot.CONTROL),
-    en("display.live.path", "Show live path", LanguageSlot.CONTROL),
+    en("display.live.path", "Show map with live path", LanguageSlot.CONTROL),
     en("display.recenter", "Recenter", LanguageSlot.CONTROL),
     en("map.north.up", "North up", LanguageSlot.BODY),
     en("map.rotate.travel", "Rotate with travel", LanguageSlot.BODY),

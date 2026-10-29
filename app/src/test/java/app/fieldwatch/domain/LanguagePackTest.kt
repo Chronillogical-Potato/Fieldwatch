@@ -4,6 +4,10 @@ import app.fieldwatch.data.DebriefPdf
 import app.fieldwatch.data.LanguageAssets
 import app.fieldwatch.data.LanguageSnapshot
 import app.fieldwatch.data.LanguageStore
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -229,6 +233,56 @@ class LanguagePackTest {
     }
 
     @Test
+    fun importReportNamesTheLinesATranslatorCanFix() {
+        val parsed = ok(
+            pack(
+                "tab.live" to "Direct",
+                "tab.filters" to "Hi {n}",
+                "class.law" to "X".repeat(19),
+                "language.confirm.change" to "no token",
+                "tab.pause" to "Bon\njour",
+                "language.cancel" to "   ",
+                "made.up" to "nope",
+                writtenFor = "1.1.21",
+            ),
+        )
+        assertEquals(setOf("tab.live"), parsed.accepted.keys)
+        assertEquals(6, parsed.ignored)
+        assertEquals(6, parsed.issues.size)
+        val tooLong = parsed.issues.filterIsInstance<LanguageIssue.TooLong>().single()
+        assertEquals("class.law", tooLong.key)
+        assertEquals(19, tooLong.length)
+        assertEquals(18, tooLong.cap)
+        val placeholders = parsed.issues.filterIsInstance<LanguageIssue.Placeholder>()
+        assertEquals(setOf("tab.filters", "language.confirm.change"), placeholders.map { it.key }.toSet())
+        assertEquals(setOf("n"), placeholders.first { it.key == "language.confirm.change" }.expected)
+        assertTrue(placeholders.first { it.key == "tab.filters" }.expected.isEmpty())
+        assertEquals(listOf("made.up"), parsed.issues.filterIsInstance<LanguageIssue.Unknown>().map { it.key })
+        assertEquals(listOf("language.cancel"), parsed.issues.filterIsInstance<LanguageIssue.Blank>().map { it.key })
+        assertEquals(listOf("tab.pause"), parsed.issues.filterIsInstance<LanguageIssue.Newline>().map { it.key })
+        assertFalse(parsed.missingKeys.contains("class.law"))
+        assertFalse(parsed.missingKeys.contains("tab.live"))
+        assertTrue(parsed.missingKeys.contains("tab.settings"))
+        assertEquals(parsed.newSince, parsed.newKeys.size)
+        assertTrue(parsed.newKeys.contains("tab.settings"))
+        assertFalse(parsed.newKeys.contains("tab.live"))
+        val text = LanguagePack.report(parsed, "1.1.34")
+        assertTrue(text.contains("Language: Test"))
+        assertTrue(text.contains("Written for 1.1.21. This phone is 1.1.34."))
+        assertTrue(text.contains("Imported: 1"))
+        assertTrue(text.contains("Too long: 1"))
+        assertTrue(text.contains("class.law"))
+        assertTrue(text.contains("19 characters. The limit is 18."))
+        assertTrue(text.contains("Keep {n}."))
+        assertTrue(text.contains("Keep the same placeholders as the English line."))
+        assertTrue(text.contains("made.up"))
+        assertTrue(text.contains("tab.settings"))
+        assertTrue(text.contains("\nImported\ntab.live\n"))
+        assertFalse(text.contains("Direct"))
+        assertFalse(text.contains("nope"))
+    }
+
+    @Test
     fun classChipCapAndSpokenClassCap() {
         val longChip = "X".repeat(19)
         val spoken = "Y".repeat(20)
@@ -263,9 +317,16 @@ class LanguagePackTest {
         } else {
             // Every line at its slot cap, written with a two-byte letter, is over 264 KiB.
             // The file cap stays. That whole file is refused. The packs in the app are smaller.
+            // Download-reason lines sat past 16 KiB. The TAK setting notes sit past 20 KiB.
+            // The trusted-network setting notes sit past 28 KiB.
+            // The report and device sentences sit past 96 KiB.
+            // 112 KiB still refuses a runaway line.
             assertReject(parsed)
             assertEquals(LanguageErrors.LARGE, (parsed as LanguageParse.Reject).messageKey)
-            assertTrue(bytes.size < LanguagePack.MAX_BYTES + 8 * 1024)
+            assertTrue(
+                "cap-fill file is ${bytes.size} bytes",
+                bytes.size < LanguagePack.MAX_BYTES + 112 * 1024,
+            )
         }
         val shipped = repoFile("app/src/main/assets/lang")
         if (shipped.isDirectory) {
@@ -386,9 +447,17 @@ class LanguagePackTest {
         assertEquals("1.1.27", parsed.writtenFor)
         assertEquals(EnglishCopy.lines.size, parsed.accepted.size)
         assertTrue(text.contains("\"slots\""))
+        assertTrue(text.contains("\"max\""))
+        val max = Json.parseToJsonElement(text).jsonObject.getValue("max").jsonObject
+        assertEquals(EnglishCopy.lines.size, max.size)
         for (line in EnglishCopy.lines) {
             assertEquals(line.text, parsed.accepted.getValue(line.key))
+            assertEquals(EnglishCopy.cap(line), max.getValue(line.key).jsonPrimitive.int)
         }
+        val withMax = ok(
+            """{"format":"fieldwatch-language","formatVersion":1,"language":"Test","languageTag":"fr","max":{"tab.live":1},"strings":{"tab.live":"Direct"}}""",
+        )
+        assertEquals("Direct", withMax.accepted.getValue("tab.live"))
         val over = ok(pack("class.law" to "X".repeat(19), "tab.live" to "Direct"))
         assertFalse(over.accepted.containsKey("class.law"))
         assertEquals("Direct", over.accepted.getValue("tab.live"))
@@ -546,6 +615,22 @@ class LanguagePackTest {
             assertTrue("${bundled.tag} settings.layer.saved", preview.accepted.containsKey("settings.layer.saved"))
             assertTrue("${bundled.tag} settings.layer.downloading", preview.accepted.containsKey("settings.layer.downloading"))
             assertTrue("${bundled.tag} settings.layer.processing", preview.accepted.containsKey("settings.layer.processing"))
+            assertTrue("${bundled.tag} settings.layer.failed.reach", preview.accepted.containsKey("settings.layer.failed.reach"))
+            assertTrue("${bundled.tag} settings.layer.failed.trust", preview.accepted.containsKey("settings.layer.failed.trust"))
+            assertTrue("${bundled.tag} settings.layer.failed.server", preview.accepted.containsKey("settings.layer.failed.server"))
+            assertTrue("${bundled.tag} settings.layer.failed.server.code", preview.accepted.containsKey("settings.layer.failed.server.code"))
+            assertTrue("${bundled.tag} settings.layer.failed.space", preview.accepted.containsKey("settings.layer.failed.space"))
+            assertTrue("${bundled.tag} settings.layer.failed.large", preview.accepted.containsKey("settings.layer.failed.large"))
+            assertTrue("${bundled.tag} settings.layer.failed.empty", preview.accepted.containsKey("settings.layer.failed.empty"))
+            assertTrue("${bundled.tag} settings.layer.failed.read", preview.accepted.containsKey("settings.layer.failed.read"))
+            assertTrue("${bundled.tag} settings.layer.failed.save", preview.accepted.containsKey("settings.layer.failed.save"))
+            assertTrue("${bundled.tag} settings.layer.failed.unchanged", preview.accepted.containsKey("settings.layer.failed.unchanged"))
+            assertTrue("${bundled.tag} import.failed.save", preview.accepted.containsKey("import.failed.save"))
+            assertTrue("${bundled.tag} import.failed.kept", preview.accepted.containsKey("import.failed.kept"))
+            assertTrue("${bundled.tag} catalog.failed.server", preview.accepted.containsKey("catalog.failed.server"))
+            assertTrue("${bundled.tag} catalog.failed.server.code", preview.accepted.containsKey("catalog.failed.server.code"))
+            assertTrue("${bundled.tag} catalog.failed.empty", preview.accepted.containsKey("catalog.failed.empty"))
+            assertTrue("${bundled.tag} catalog.failed.read", preview.accepted.containsKey("catalog.failed.read"))
             assertTrue("${bundled.tag} ui.radios.here", preview.accepted.containsKey("ui.radios.here"))
             assertTrue("${bundled.tag} ui.move.path", preview.accepted.containsKey("ui.move.path"))
             assertTrue("${bundled.tag} ui.waiting.gps.fix", preview.accepted.containsKey("ui.waiting.gps.fix"))
@@ -554,6 +639,8 @@ class LanguagePackTest {
             assertTrue("${bundled.tag} ui.cameras.within", preview.accepted.containsKey("ui.cameras.within"))
             assertTrue("${bundled.tag} ui.cameras.facing.count", preview.accepted.containsKey("ui.cameras.facing.count"))
             assertTrue("${bundled.tag} ui.cameras.near.count", preview.accepted.containsKey("ui.cameras.near.count"))
+            assertTrue("${bundled.tag} ui.cameras.kind.gun", preview.accepted.containsKey("ui.cameras.kind.gun"))
+            assertTrue("${bundled.tag} ui.map.camera.facing", preview.accepted.containsKey("ui.map.camera.facing"))
             for ((key, value) in preview.accepted) {
                 val english = EnglishCopy.text(key)
                 assertTrue("${bundled.tag} $key over cap", value.length <= EnglishCopy.cap(key))
@@ -606,6 +693,8 @@ class LanguagePackTest {
         assertTrue(text.contains("not reviewed or certified"))
         assertTrue(text.contains("Wi-Fi"))
         assertTrue(text.contains("264 KiB"))
+        assertTrue(text.contains("Save report"))
+        assertTrue(text.contains("`max`"))
     }
 
     @Test

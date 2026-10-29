@@ -112,7 +112,12 @@ fun CandidatesScreen(
                         Text(
                             (report?.sourceLabel ?: LanguageText.text("ui.rotating.log")) +
                                 (" " + LanguageText.text("ui.re.matched.now")) +
-                                (report?.let { " · ${it.families.size} ${if (it.families.size == 1) "family" else "families"}" } ?: ""),
+                                (report?.let {
+                                    " · " + LanguageText.text(
+                                        "candidates.families",
+                                        mapOf("n" to it.families.size.toString()),
+                                    )
+                                } ?: ""),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -212,7 +217,11 @@ private fun CandidateCard(
             )
             val examples = cand.examples.map { MacUtil.redactMacIn(it, it, demoMode && looksLikeMac(it)) }
             if (examples.isNotEmpty()) {
-                val extra = if (cand.extraCount > 0) "\nand ${cand.extraCount} more" else ""
+                val extra = if (cand.extraCount > 0) {
+                    "\n" + LanguageText.text("candidates.more", mapOf("n" to cand.extraCount.toString()))
+                } else {
+                    ""
+                }
                 Text(
                     examples.joinToString(" · ") + extra,
                     style = compact(12.sp, 15.sp),
@@ -237,9 +246,13 @@ private fun CandidateCard(
 private fun skipLine(report: app.fieldwatch.domain.CandidateReport): String = buildString {
     append((LanguageText.text("ui.skipped.label") + " "))
     val bits = ArrayList<String>(2)
-    if (report.skippedRandomized > 0) bits += "${report.skippedRandomized} randomized addresses"
-    if (report.skippedHouseLike > 0) bits += "${report.skippedHouseLike} house-like names"
-    append(bits.joinToString(" and "))
+    if (report.skippedRandomized > 0) {
+        bits += LanguageText.text("candidates.random", mapOf("n" to report.skippedRandomized.toString()))
+    }
+    if (report.skippedHouseLike > 0) {
+        bits += LanguageText.text("candidates.house", mapOf("n" to report.skippedHouseLike.toString()))
+    }
+    append(bits.joinToString(" " + LanguageText.text("candidates.join") + " "))
     append(LanguageText.text("ui.those.not.catalog.families"))
 }
 

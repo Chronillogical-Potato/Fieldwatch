@@ -150,6 +150,47 @@ class Alerter(private val context: Context) {
     }
 
     /**
+     * Trusted-network alert. Own channel so it can be muted without muting the watchlist.
+     * [title] and [body] must not include coordinates. Phrase is null when voice is off.
+     */
+    fun trustedAlert(title: String, body: String, phrase: String?, beep: Boolean, shade: Boolean) {
+        if (shade) {
+            ensureTrustedChannel()
+            val pending = PendingIntent.getActivity(
+                context,
+                TRUSTED_NOTE_ID,
+                Intent(context, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+            val note = NotificationCompat.Builder(context, TRUSTED_CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_fieldwatch)
+                .setContentTitle(title)
+                .setContentText(body)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_ALARM)
+                .setAutoCancel(true)
+                .setSilent(true)
+                .setContentIntent(pending)
+                .build()
+            manager.notify(TRUSTED_NOTE_ID, note)
+        } else {
+            manager.cancel(TRUSTED_NOTE_ID)
+        }
+        if (beep) beep(holdFocus = phrase.isNullOrBlank())
+        if (!phrase.isNullOrBlank()) {
+            prepareVoice()
+            queueVoice(phrase, afterBeep = beep)
+        }
+    }
+
+    fun clearTrustedNote() {
+        manager.cancel(TRUSTED_NOTE_ID)
+    }
+
+    /**
      * A known mapped sensor ahead. Speaks [text], posts it on the layer channel, and pulses once.
      * [text] has no coordinates. This does not use the watchlist beep.
      */
@@ -607,6 +648,17 @@ class Alerter(private val context: Context) {
         )
     }
 
+    private fun ensureTrustedChannel() {
+        if (Build.VERSION.SDK_INT < 26) return
+        if (manager.getNotificationChannel(TRUSTED_CHANNEL) != null) return
+        manager.createNotificationChannel(
+            NotificationChannel(TRUSTED_CHANNEL, LanguageText.text("settings.topic.trusted"), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = LanguageText.text("trusted.help")
+                setSound(null, null)
+            },
+        )
+    }
+
     private fun ensureFlockChannel() {
         if (Build.VERSION.SDK_INT < 26) return
         if (manager.getNotificationChannel(FLOCK_CHANNEL) != null) return
@@ -639,7 +691,9 @@ class Alerter(private val context: Context) {
         const val CHANNEL = "fieldwatch_watch_v3"
         const val GNSS_CHANNEL = "fieldwatch_gnss"
         const val FLOCK_CHANNEL = "fieldwatch_map_layers"
+        const val TRUSTED_CHANNEL = "fieldwatch_trusted"
         private const val GNSS_NOTE_ID = 71_001
+        private const val TRUSTED_NOTE_ID = 71_002
         private const val FLOCK_NOTE_ID = 72_010
         const val EXTRA_DEVICE_KEY = "device_key"
         private const val FREQ_HZ = 1050.0

@@ -88,7 +88,8 @@ object PathCameras {
 
     /**
      * Sit report. The same lines as Reports → Path.
-     * A list that is not on the phone is still named. The layer switches do not apply here.
+     * A list that is not on the phone is still named while its switch is on.
+     * Call [shownInReport] first so a switch that is off is left out.
      */
     fun text(tally: Tally): String {
         if (!tally.plates && !tally.others) return LanguageText.text("ui.cameras.lists.missing")
@@ -155,6 +156,33 @@ object PathCameras {
             }
         }
         return tally.copy(plates = plates, others = others, counts = counts, cameras = cameras)
+    }
+
+    /**
+     * Sit report and the path printed with it.
+     * A layer switch that is off leaves that list out of the counts and the marks.
+     * A list that is not on the phone is still named while its switch is on.
+     * Null means the section and the marks stay off.
+     */
+    fun shownInReport(tally: Tally, platesOn: Boolean, othersOn: Boolean): Tally? {
+        if (!platesOn && !othersOn) return null
+        val counts = tally.counts.filter { count ->
+            val plateRow = count.labelKey == Row.FLOCK.labelKey || count.labelKey == Row.PLATE.labelKey
+            if (plateRow) platesOn else othersOn
+        }
+        val cameras = tally.cameras.filter { cam ->
+            when (cam.kind) {
+                SensorKind.PLATE -> platesOn
+                SensorKind.GUNSHOT -> false
+                else -> othersOn
+            }
+        }
+        return tally.copy(
+            plates = if (platesOn) tally.plates else true,
+            others = if (othersOn) tally.others else true,
+            counts = counts,
+            cameras = cameras,
+        )
     }
 
     private data class Seen(val key: Long, val row: Row)

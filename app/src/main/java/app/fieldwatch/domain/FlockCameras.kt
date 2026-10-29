@@ -5,6 +5,8 @@ import kotlin.math.asin
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.floor
+import kotlin.math.hypot
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -573,4 +575,133 @@ class FlockIndex {
             return lo
         }
     }
+}
+
+/** Lines for the map card. A crowd names the kind and the count only. */
+data class CameraCard(
+    val kindKey: String,
+    val count: Int,
+    val brand: String,
+    val facing: String,
+)
+
+fun cameraKindKey(mark: FlockMark): String = when (mark.kind) {
+    SensorKind.PLATE -> when {
+        mark.count == 1 && mark.flock -> "ui.cameras.kind.flock"
+        mark.count == 1 -> "ui.cameras.kind.plate"
+        else -> "settings.layer.flock"
+    }
+    SensorKind.SPEED -> "ui.cameras.kind.speed"
+    SensorKind.RED -> "ui.cameras.kind.red"
+    SensorKind.GUNSHOT -> "ui.cameras.kind.gun"
+    SensorKind.CAMERA -> "ui.cameras.kind.other"
+}
+
+/** Compass letters. The map button uses the same N, and these stay untranslated. */
+fun compassPoint(deg: Int): String {
+    val names = arrayOf("N", "NE", "E", "SE", "S", "SW", "W", "NW")
+    var turned = deg % 360
+    if (turned < 0) turned += 360
+    return names[((turned + 22) / 45) % 8]
+}
+
+fun cameraFacing(mark: FlockMark): String {
+    if (mark.count != 1 || mark.facings.isEmpty()) return ""
+    return mark.facings.map { compassPoint(it) }.distinct().joinToString(", ")
+}
+
+fun cameraCard(mark: FlockMark, brand: String): CameraCard = CameraCard(
+    cameraKindKey(mark),
+    mark.count,
+    if (mark.count == 1) brand.trim() else "",
+    cameraFacing(mark),
+)
+
+/**
+ * Company on a single mark. The closest saved sensor of that kind within 15 m.
+ * A crowd has no one company.
+ */
+fun cameraBrand(index: FlockIndex, mark: FlockMark): String {
+    if (mark.count != 1) return ""
+    val same = index.near(mark.lat, mark.lon, 15.0)
+        .filter { it.kind == mark.kind && it.flock == mark.flock }
+    val faced = same.filter { it.facings == mark.facings }
+    val pool = if (faced.isNotEmpty()) faced else same
+    val pick = pool.minByOrNull { Geo.meters(mark.lat, mark.lon, it.lat, it.lon) } ?: return ""
+    return pick.brand.trim()
+}
+
+/**
+ * Marks that share [anchor]'s screen spot.
+ * [stackPx] matches a stacked detection, so a line of cameras along a road stays separate.
+ */
+fun camerasOnSpot(
+    marks: List<FlockMark>,
+    anchor: FlockMark,
+    stackPx: Float = 28f,
+    project: (Double, Double) -> Pair<Float, Float>,
+): List<FlockMark> {
+    val (ax, ay) = project(anchor.lat, anchor.lon)
+    if (!ax.isFinite() || !ay.isFinite()) return listOf(anchor)
+    val thresh2 = stackPx * stackPx
+    val near = marks.filter { mark ->
+        val (x, y) = project(mark.lat, mark.lon)
+        if (!x.isFinite() || !y.isFinite()) return@filter false
+        val dx = x - ax
+        val dy = y - ay
+        dx * dx + dy * dy <= thresh2
+    }
+    if (near.isEmpty()) return listOf(anchor)
+    return near.sortedWith(compareBy({ it.kind.ordinal }, { it.lat }, { it.lon }, { it.flock }))
+}
+
+/** Where a leader meets a card. The point is on the card edge nearest the mark. */
+fun cardAnchor(
+    x: Float,
+    y: Float,
+    left: Float,
+    top: Float,
+    right: Float,
+    bottom: Float,
+): Pair<Float, Float> {
+    if (right < left || bottom < top) return x to y
+    return x.coerceIn(left, right) to y.coerceIn(top, bottom)
+}
+
+/** Closest mark center within [slopPx]. The view cone is not part of the hit. */
+fun cameraAt(
+    marks: List<FlockMark>,
+    x: Float,
+    y: Float,
+    slopPx: Float = 40f,
+    project: (Double, Double) -> Pair<Float, Float>,
+): FlockMark? {
+    var best: FlockMark? = null
+    var bestD = Double.MAX_VALUE
+    for (mark in marks) {
+        val (px, py) = project(mark.lat, mark.lon)
+        if (!px.isFinite() || !py.isFinite()) continue
+        val d = hypot((px - x).toDouble(), (py - y).toDouble())
+        if (d <= slopPx.toDouble() && d < bestD) {
+            best = mark
+            bestD = d
+        }
+    }
+    return best
+}
+
+/**
+ * A camera loses a tie, and it loses when a GNSS diamond or a detection is
+ * within about half a disc. A mark drawn under a badge does not take that tap.
+ */
+fun cameraWinsTap(cameraD: Float, gnssD: Float?, radioD: Float?): Boolean {
+    if (gnssD != null && cameraD + 8f >= gnssD) return false
+    if (radioD != null && cameraD + 8f >= radioD) return false
+    return true
+}
+
+fun cameraId(mark: FlockMark): String {
+    val lat = (mark.lat * 1_000_000.0).roundToInt() / 1_000_000.0
+    val lon = (mark.lon * 1_000_000.0).roundToInt() / 1_000_000.0
+    return "${mark.kind.name}:${if (mark.flock) 1 else 0}:${mark.count}:$lat:$lon"
 }

@@ -251,7 +251,7 @@ A language pack leaves the catalog, settings, watches, logs, and sits alone.
 
 ## English template
 
-Export English template writes a `fieldwatch-language` file from the same English map the app uses. `language` is English. `writtenFor` is the current `versionName`. `strings` contains every key. A translator edits the values and the language name, and may delete keys they are not translating. Importing that template unchanged shows English.
+Export English template writes a `fieldwatch-language` file from the same English map the app uses. `language` is English. `writtenFor` is the current `versionName`. `strings` contains every key. The file also has a `max` object, one integer per key, the character limit after trim. Authors may delete `max`. Import ignores it. The app uses the limit compiled into that version. A translator edits the values and the language name, and may delete keys they are not translating. Importing that template unchanged shows English.
 
 There is no second hand-maintained copy of the English text. The template is generated from the map.
 
@@ -359,9 +359,9 @@ The guide needs to say:
 - There are no plural forms. One sentence has to read right for every count. In Polish, Czech, Latvian, and other Slavic or Baltic languages, that gets awkward. Use a form such as `count: {n}` rather than forcing the noun to agree with the number.
 - The text is display text. HTML, scripts, links, and format strings are shown as characters or dropped. They do not run.
 - Stay inside the slot for each key. A tab or a class chip is at most 18 characters. A chip, button, row, or spoken phrase is at most twice the English length and never more than 48 characters. A dialog or other long sentence is at most three times the English length and never more than 700 characters. The language name is at most 40 characters. The file is at most 264 KiB. A line that is too long is left in English. A newline is kept only when the English line has one.
-- For a tab or a class chip, pick a shorter word when the full word would pass 18 characters. A German compound is the usual case. A line over the cap stays English, and the confirm dialog only counts it. It does not point at the word.
+- For a tab or a class chip, pick a shorter word when the full word would pass 18 characters. A German compound is the usual case. A line over the cap stays English. The confirm dialog counts it. Save report on that dialog writes a text file that names the key, the length, and the limit, plus missing keys, placeholder mismatches, blank lines, extra line breaks, and unknown keys. The headings stay English.
 - Leave these words as written: Wi-Fi, Bluetooth, GPS, GNSS, USB, PDF, CSV, ATAK, SSID, MAC, RSSI, and OUI. Translate ordinary words. Translate Fieldwatch terms such as sit, signature, and Extra attention into plain words.
-- After a Fieldwatch update, import the pack again and read "new since your pack" on the confirm dialog. That count is the keys added after `writtenFor` which this pack does not translate. Export a fresh English template and translate those keys. Leave `writtenFor` as the version of that template.
+- After a Fieldwatch update, export a fresh English template and translate the lines the file does not have. Import the pack and use Save report. Missing names every key the file lacks. The dialog line "{n} keys are new since your pack." only counts keys added after `writtenFor`. Leave `writtenFor` as the version of that template.
 - Set `language` to the name users should see, and `writtenFor` to the version of the template. One pack replaces another. It does not merge.
 - The sentence that packs are not reviewed or certified is official text. It is not in the template, and a pack cannot change it.
 - Tell users to import the file from Settings, or from the first-run door when their phone language is not English and not one of the bundled languages. The guide can describe those steps. The in-app wording for phone users still belongs in the user manual. A bundled language is already in the APK. Do not tell those users to import it.

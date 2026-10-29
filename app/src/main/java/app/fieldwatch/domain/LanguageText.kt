@@ -4,6 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
 
 /**
  * The one lookup. Compose and the domain layer both call this.
@@ -12,6 +13,9 @@ import kotlinx.coroutines.flow.asStateFlow
 object LanguageText {
     @Volatile
     private var overlay: Map<String, String> = emptyMap()
+
+    @Volatile
+    private var locale: Locale = Locale.US
 
     /**
      * Compose only redraws a screen that read snapshot state.
@@ -22,11 +26,19 @@ object LanguageText {
     private val revisions = MutableStateFlow(0)
     val revision: StateFlow<Int> = revisions.asStateFlow()
 
-    fun apply(map: Map<String, String>) {
+    fun apply(map: Map<String, String>, tag: String? = null) {
+        locale = if (tag.isNullOrBlank() || tag.equals("en", ignoreCase = true)) {
+            Locale.US
+        } else {
+            Locale.forLanguageTag(tag)
+        }
         overlay = map
         clock.value = clock.value + 1
         revisions.value = revisions.value + 1
     }
+
+    /** Sit names follow the active language. Numbers and share timestamps stay on Locale.US. */
+    fun dateLocale(): Locale = locale
 
     fun clear() {
         apply(emptyMap())

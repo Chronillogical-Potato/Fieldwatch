@@ -6,6 +6,7 @@ import app.fieldwatch.domain.FlockCamera
 import app.fieldwatch.domain.FlockParseException
 import app.fieldwatch.domain.SensorKind
 import app.fieldwatch.domain.parseFlock
+import kotlinx.coroutines.CancellationException
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.DataInputStream
@@ -15,8 +16,12 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 import java.util.zip.GZIPInputStream
+import javax.net.ssl.SSLException
 
 /**
  * One downloaded list. Plate readers and the other sensors are separate files.
@@ -67,12 +72,35 @@ object FlockFiles {
 
     data class Saved(val header: Header, val cameras: List<FlockCamera>)
 
-    enum class Probe { SAME, CHANGED, FAILED }
+    /** Why a download or an update check stopped. The settings row names this. */
+    enum class Reason {
+        REACH,
+        TRUST,
+        SERVER,
+        SPACE,
+        LARGE,
+        EMPTY,
+        READ,
+        SAVE,
+        OTHER,
+    }
+
+    sealed class Probe {
+        data object Same : Probe()
+        data object Changed : Probe()
+        data class Failed(val reason: Reason, val code: Int = 0) : Probe()
+    }
 
     sealed class Fetch {
         data class Saved(val savedAt: Long) : Fetch()
         data object Current : Fetch()
-        data object Failed : Fetch()
+        data class Failed(val reason: Reason, val code: Int = 0) : Fetch()
+    }
+
+    fun failReason(error: Exception): Reason = when (error) {
+        is SSLException -> Reason.TRUST
+        is UnknownHostException, is SocketTimeoutException, is SocketException -> Reason.REACH
+        else -> Reason.OTHER
     }
 
     fun file(dir: File, list: SensorList = SensorList.PLATES): File = File(dir, list.fileName)
@@ -105,6 +133,9 @@ object FlockFiles {
                 tmp.delete()
             }
             true
+        } catch (e: CancellationException) {
+            tmp.delete()
+            throw e
         } catch (_: Exception) {
             tmp.delete()
             false
@@ -133,19 +164,23 @@ object FlockFiles {
     }
 
     fun probe(dir: File, list: SensorList = SensorList.PLATES): Probe {
-        if (list.url.isBlank()) return Probe.FAILED
+        if (list.url.isBlank()) return Probe.Failed(Reason.OTHER)
         val saved = peek(dir, list)?.etag.orEmpty()
-        val conn = open(list, "HEAD", ifNoneMatch = null)
+        var conn: HttpURLConnection? = null
         return try {
-            val code = conn.responseCode
-            if (code == 304) return Probe.SAME
-            if (code != 200) return Probe.FAILED
-            val remote = conn.getHeaderField("ETag").orEmpty()
-            if (saved.isNotEmpty() && remote.isNotEmpty() && remote == saved) Probe.SAME else Probe.CHANGED
-        } catch (_: Exception) {
-            Probe.FAILED
+            val connection = open(list, "HEAD", ifNoneMatch = null)
+            conn = connection
+            val code = connection.responseCode
+            if (code == 304) return Probe.Same
+            if (code != 200) return Probe.Failed(Reason.SERVER, code)
+            val remote = connection.getHeaderField("ETag").orEmpty()
+            if (saved.isNotEmpty() && remote.isNotEmpty() && remote == saved) Probe.Same else Probe.Changed
+        } catch (e: CancellationException) {
+            throw e
+        } catch (error: Exception) {
+            Probe.Failed(failReason(error))
         } finally {
-            conn.disconnect()
+            conn?.disconnect()
         }
     }
 
@@ -154,61 +189,67 @@ object FlockFiles {
         list: SensorList = SensorList.PLATES,
         onPercent: (Int) -> Unit,
     ): Fetch {
-        if (list.url.isBlank()) return Fetch.Failed
+        if (list.url.isBlank()) return Fetch.Failed(Reason.OTHER)
         val header = peek(dir, list)
         // Version 1 of the plate file saved Flock only. Skip If-None-Match so that list is fetched again.
         val savedEtag = header?.etag?.takeIf {
             it.isNotEmpty() && (!list.refillFlockOnly || header.version >= ALL_PLATES)
         }
-        val conn = open(list, "GET", savedEtag)
+        var conn: HttpURLConnection? = null
         val tmp = File(dir, "${list.fileName}.download")
-        tmp.delete()
         return try {
-            val code = conn.responseCode
+            tmp.delete()
+            val connection = open(list, "GET", savedEtag)
+            conn = connection
+            val code = connection.responseCode
             if (code == 304) return Fetch.Current
-            if (code != 200) return Fetch.Failed
-            val length = conn.contentLengthLong
-            if (length > MAX_BYTES) return Fetch.Failed
+            if (code != 200) return Fetch.Failed(Reason.SERVER, code)
+            val length = connection.contentLengthLong
+            if (length > MAX_BYTES) return Fetch.Failed(Reason.LARGE)
             val need = if (length > 0L) length else list.expectedBytes
             val room = dir.usableSpace
-            if (room > 0L && room < need + 8L * 1024L * 1024L) return Fetch.Failed
+            if (room > 0L && room < need + 8L * 1024L * 1024L) return Fetch.Failed(Reason.SPACE)
             val total = if (length > 0L) length else list.expectedBytes
+            if (total <= 0L) return Fetch.Failed(Reason.EMPTY)
             var read = 0L
             var lastPct = -1
-            conn.inputStream.use { input ->
+            connection.inputStream.use { input ->
                 FileOutputStream(tmp).use { out ->
                     val buf = ByteArray(256 * 1024)
                     while (true) {
                         val n = input.read(buf)
                         if (n < 0) break
                         read += n
-                        if (read > MAX_BYTES) return Fetch.Failed
+                        if (read > MAX_BYTES) return Fetch.Failed(Reason.LARGE)
                         out.write(buf, 0, n)
                         val pct = ((read * 100L) / total).toInt().coerceIn(0, 99)
                         if (pct != lastPct) {
                             lastPct = pct
-                            onPercent(pct)
+                            runCatching { onPercent(pct) }
                         }
                     }
                 }
             }
-            onPercent(100)
-            val etag = conn.getHeaderField("ETag").orEmpty().ifEmpty { savedEtag.orEmpty() }
+            runCatching { onPercent(100) }
+            val etag = connection.getHeaderField("ETag").orEmpty().ifEmpty { savedEtag.orEmpty() }
             val savedAt = System.currentTimeMillis()
             val plates = try {
                 parseFile(tmp)
             } catch (_: Exception) {
-                return Fetch.Failed
+                return Fetch.Failed(Reason.READ)
             }
-            if (plates.size < FlockApproach.MIN_COUNT) return Fetch.Failed
-            if (!install(dir, plates, etag, savedAt, list)) return Fetch.Failed
-            onPercent(100)
+            if (plates.isEmpty()) return Fetch.Failed(Reason.EMPTY)
+            if (plates.size < FlockApproach.MIN_COUNT) return Fetch.Failed(Reason.READ)
+            if (!install(dir, plates, etag, savedAt, list)) return Fetch.Failed(Reason.SAVE)
+            runCatching { onPercent(100) }
             Fetch.Saved(savedAt)
-        } catch (_: Exception) {
-            Fetch.Failed
+        } catch (e: CancellationException) {
+            throw e
+        } catch (error: Exception) {
+            Fetch.Failed(failReason(error))
         } finally {
             tmp.delete()
-            conn.disconnect()
+            conn?.disconnect()
         }
     }
 

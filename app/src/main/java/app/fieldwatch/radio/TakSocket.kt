@@ -19,15 +19,8 @@ internal fun takBirth(wifi: Boolean, ethernet: Boolean, cellular: Boolean): TakB
 
 /**
  * A same-phone socket opened with no LAN is replaced once Wi-Fi or Ethernet
- * is connected, even if the pin to lo reported success and even if cellular
- * was already up. A socket opened on a LAN stays after that LAN drops.
+ * is connected, including when cellular was already up. A socket opened on
+ * a LAN stays after that LAN drops.
  */
 internal fun replaceLoopbackSocket(openedOnLan: Boolean, lanNow: Boolean): Boolean =
     !openedOnLan && lanNow
-
-/** A short name for the Diagnostics row. No message text, so a path cannot leak. */
-internal fun takBindError(err: Throwable): String {
-    val cause = (err as? java.lang.reflect.InvocationTargetException)?.cause ?: err
-    val name = cause.javaClass.simpleName.filter { it.isLetterOrDigit() }
-    return name.take(24).ifBlank { "refused" }
-}

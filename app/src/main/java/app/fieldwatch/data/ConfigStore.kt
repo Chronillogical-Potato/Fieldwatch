@@ -86,8 +86,11 @@ class ConfigStore(context: Context) {
     }
 
     suspend fun update(transform: (PersistedConfig) -> PersistedConfig) = mutex.withLock {
-        val next = transform(_config.value)
-        _config.value = next
+        writeConfig(transform(_config.value))
+    }
+
+    /** Writes first. A failed write leaves the catalog and settings already on the phone. */
+    private suspend fun writeConfig(next: PersistedConfig) {
         withContext(Dispatchers.IO) {
             val tmp = File(file.parentFile, "config.tmp")
             tmp.writeText(json.encodeToString(next))
@@ -96,6 +99,7 @@ class ConfigStore(context: Context) {
                 tmp.delete()
             }
         }
+        _config.value = next
     }
 
     suspend fun restoreDefaults() {
@@ -122,16 +126,7 @@ class ConfigStore(context: Context) {
         if (result.error != null || (result.added == 0 && result.merged == 0)) {
             return@withLock result
         }
-        val next = _config.value.copy(fleets = merged)
-        _config.value = next
-        withContext(Dispatchers.IO) {
-            val tmp = File(file.parentFile, "config.tmp")
-            tmp.writeText(json.encodeToString(next))
-            if (!tmp.renameTo(file)) {
-                file.writeText(tmp.readText())
-                tmp.delete()
-            }
-        }
+        writeConfig(_config.value.copy(fleets = merged))
         result
     }
 
@@ -160,16 +155,7 @@ class ConfigStore(context: Context) {
         if (overlay.error != null) {
             return@withLock StockCatalogUpdateResult(error = overlay.error)
         }
-        val next = local.copy(fleets = fleets, version = pack.catalogVersion)
-        _config.value = next
-        withContext(Dispatchers.IO) {
-            val tmp = File(file.parentFile, "config.tmp")
-            tmp.writeText(json.encodeToString(next))
-            if (!tmp.renameTo(file)) {
-                file.writeText(tmp.readText())
-                tmp.delete()
-            }
-        }
+        writeConfig(local.copy(fleets = fleets, version = pack.catalogVersion))
         overlay.copy(catalogVersion = pack.catalogVersion)
     }
 

@@ -93,8 +93,6 @@ data class TakDiagFacts(
     val preset: TakUdpPreset = TakUdpPreset.THIS_PHONE,
     val port: Int = TakDefaults.PORT,
     val open: Boolean = false,
-    val pinned: Boolean = false,
-    val bindError: String? = null,
     val birth: TakBirth? = null,
     val lastSendOk: Boolean? = null,
 )
@@ -170,13 +168,11 @@ object ScanStatus {
         } else {
             LanguageText.text("diag.off")
         }
+        val birth = tak.birth
         val loop = when {
-            !tak.open -> LanguageText.text("diag.tak.loopback.closed")
-            tak.pinned -> LanguageText.text("diag.tak.loopback.lo")
-            else -> LanguageText.text(
-                "diag.tak.loopback.failed",
-                mapOf("error" to (tak.bindError?.take(24)?.ifBlank { null } ?: "refused")),
-            )
+            !tak.open || birth == null -> LanguageText.text("diag.tak.loopback.closed")
+            samePhoneReachesAtak(birth) -> LanguageText.text("diag.tak.same.reach")
+            else -> LanguageText.text("diag.tak.same.wifi")
         }
         val opened = when (tak.birth) {
             null -> LanguageText.text("diag.tak.loopback.closed")

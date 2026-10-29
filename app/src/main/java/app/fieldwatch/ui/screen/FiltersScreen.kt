@@ -398,7 +398,10 @@ fun FiltersScreen(state: FieldwatchUi, vm: FieldwatchViewModel) {
             LaunchedEffect(filter.rssiMin) {
                 if (!rssiDragging) rssiDrag = filter.rssiMin
             }
-            Text("Minimum RSSI  $rssiDrag dBm", style = MaterialTheme.typography.labelLarge)
+            Text(
+                LanguageText.text("filters.rssi", mapOf("n" to rssiDrag.toString())),
+                style = MaterialTheme.typography.labelLarge,
+            )
             FieldwatchSlider(
                 value = rssiDrag.toFloat(),
                 onValueChange = { v ->
@@ -433,12 +436,12 @@ fun FiltersScreen(state: FieldwatchUi, vm: FieldwatchViewModel) {
                 FieldwatchFilterChip(
                     selected = filter.logic == FilterLogic.AND,
                     onClick = { vm.updateFilter { it.copy(logic = FilterLogic.AND) } },
-                    label = { Text("AND") },
+                    label = { Text(LanguageText.text("filters.and")) },
                 )
                 FieldwatchFilterChip(
                     selected = filter.logic == FilterLogic.OR,
                     onClick = { vm.updateFilter { it.copy(logic = FilterLogic.OR) } },
-                    label = { Text("OR") },
+                    label = { Text(LanguageText.text("filters.or")) },
                 )
             }
             }
@@ -475,9 +478,9 @@ fun FiltersScreen(state: FieldwatchUi, vm: FieldwatchViewModel) {
             text = {
                 Text(
                     if (preset.isBuiltIn()) {
-                        "Remove “${preset.name}” from this list? A catalog update will not put it back. Settings → Restore default signatures & presets brings the stock presets back. Live keeps this filter until you pick another preset or tap Reset filter."
+                        LanguageText.text("filters.delete.stock", mapOf("name" to preset.name))
                     } else {
-                        "Delete “${preset.name}”? This cannot be undone. Live keeps this filter until you pick another preset or tap Reset filter."
+                        LanguageText.text("filters.delete.custom", mapOf("name" to preset.name))
                     },
                 )
             },

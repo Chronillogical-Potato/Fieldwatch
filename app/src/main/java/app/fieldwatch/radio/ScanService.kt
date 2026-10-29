@@ -21,10 +21,15 @@ import androidx.lifecycle.lifecycleScope
 import app.fieldwatch.MainActivity
 import app.fieldwatch.R
 import app.fieldwatch.FieldwatchApp
+import app.fieldwatch.domain.MacUtil
 import app.fieldwatch.domain.Observation
+import app.fieldwatch.domain.RadioDb
 import app.fieldwatch.domain.TakFlood
 import app.fieldwatch.domain.TakGnss
+import app.fieldwatch.domain.TrustedNets
+import app.fieldwatch.domain.TwinHear
 import app.fieldwatch.domain.RadioKind
+import app.fieldwatch.domain.trustedOpt
 import app.fieldwatch.domain.ScanIntensity
 import app.fieldwatch.domain.detectionPolicy
 import android.os.SystemClock
@@ -294,6 +299,7 @@ class ScanService : LifecycleService() {
                 }
                 app.sits.noteFloods(app.pairingFlood.bursts())
                 app.sits.ingest(seen, fleets, app.config.watchlist)
+                considerTrusted(app, tagged)
                 if (settings.placeWatch && settings.tagLocation) {
                     app.places.hear(
                         seen,
@@ -323,6 +329,60 @@ class ScanService : LifecycleService() {
         }
         } catch (_: kotlinx.coroutines.channels.ClosedReceiveChannelException) {
             return
+        }
+    }
+
+    /**
+     * Trusted names only. Location comes from the GPS fix, not a network fix on the row.
+     * A quiet or cached hear still goes in so a dismissed episode can keep its clock.
+     */
+    private fun considerTrusted(app: FieldwatchApp, batch: List<Observation>) {
+        if (app.trusted.snapshot().nets.isEmpty()) return
+        val settings = app.config.settings
+        val opt = settings.trustedOpt()
+        val now = System.currentTimeMillis()
+        val fix = app.trustFix(now)
+        val demo = settings.demoMode
+        for (obs in batch) {
+            if (obs.kind != RadioKind.WIFI || obs.hiddenSsid || obs.name.isBlank()) continue
+            val alert = app.trusted.hear(
+                TwinHear(
+                    ssid = obs.name,
+                    bssid = obs.mac,
+                    rssi = obs.rssi,
+                    fresh = obs.fresh,
+                    securityText = obs.facts.security,
+                    channel = obs.channel,
+                    frequencyMhz = obs.frequencyMhz,
+                    vendor = RadioDb.vendorForMac(obs.mac),
+                    lat = fix.lat,
+                    lon = fix.lon,
+                    accuracyM = fix.accuracyM,
+                    locationPaused = fix.paused,
+                ),
+                opt,
+                now,
+            ) ?: continue
+            val sentence = TrustedNets.sentence(alert.ssid, alert.reasons)
+            val note = if (alert.ouiNote) {
+                LanguageText.text("trusted.oui.note", mapOf("oui" to "00:13:37"))
+            } else {
+                null
+            }
+            val body = buildString {
+                append(MacUtil.screenMac(alert.bssid, demo))
+                if (note != null) {
+                    append('\n')
+                    append(note)
+                }
+            }
+            app.alerter.trustedAlert(
+                title = sentence,
+                body = body,
+                phrase = if (alert.voice) sentence else null,
+                beep = alert.beep,
+                shade = alert.shade,
+            )
         }
     }
 
@@ -401,6 +461,11 @@ class ScanService : LifecycleService() {
                 app.config.update { cur ->
                     if (cur.takLegacySelfRetired) cur else cur.copy(takLegacySelfRetired = true)
                 }
+            }
+            val takOn = settings.takEnabled && !settings.demoMode
+            val plan = app.trusted.planCot(settings.trustedOpt(), takOn, System.currentTimeMillis())
+            if (plan.xml.isNotEmpty() && app.tak.sendNow(settings, plan.xml)) {
+                app.trusted.commitCot(plan)
             }
         } catch (e: CancellationException) {
             throw e

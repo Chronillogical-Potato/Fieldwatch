@@ -168,10 +168,19 @@ fun FieldwatchRoot(vm: FieldwatchViewModel, onRequestPermissions: () -> Unit) {
             } else {
                 FieldwatchShell(state, vm)
             }
+            val context = LocalContext.current
+            val export by vm.export.collectAsStateWithLifecycle()
+            androidx.compose.runtime.LaunchedEffect(export.share) {
+                export.share?.let { intent ->
+                    context.startActivity(Intent.createChooser(intent, export.shareTitle))
+                    vm.consumeShare()
+                }
+            }
             LanguageOverlays(
                 state = language,
                 onConfirmImport = vm::confirmLanguageImport,
                 onCancelImport = vm::cancelLanguageImport,
+                onSaveReport = vm::startLanguageReportShare,
                 onDismissError = vm::dismissLanguageError,
                 onDismissAi = vm::dismissLanguageAi,
             )
@@ -297,12 +306,7 @@ private fun FieldwatchShell(state: FieldwatchUi, vm: FieldwatchViewModel) {
     ) { uri ->
         uri?.let(vm::startSitSaveToUri)
     }
-    androidx.compose.runtime.LaunchedEffect(export.share) {
-        export.share?.let { intent ->
-            context.startActivity(Intent.createChooser(intent, export.shareTitle))
-            vm.consumeShare()
-        }
-    }
+
     if (export.active) {
         AlertDialog(
             onDismissRequest = { },

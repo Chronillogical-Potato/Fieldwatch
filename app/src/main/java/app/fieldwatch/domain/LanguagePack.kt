@@ -20,7 +20,22 @@ data class LanguagePreview(
     /** Null when writtenFor is missing or not a version the app can compare. */
     val newSince: Int?,
     val formatNewer: Boolean,
+    /** Lines in the file that this version did not keep. The ignored count is this list. */
+    val issues: List<LanguageIssue> = emptyList(),
+    /** English keys the file does not contain. A rejected line is an issue, not a missing key. */
+    val missingKeys: List<String> = emptyList(),
+    /** Keys added after writtenFor that this file does not keep. Empty when writtenFor cannot be compared. */
+    val newKeys: List<String> = emptyList(),
 )
+
+/** One line in an imported pack that stayed English, or a key this version does not have. */
+sealed class LanguageIssue {
+    data class TooLong(val key: String, val length: Int, val cap: Int) : LanguageIssue()
+    data class Placeholder(val key: String, val expected: Set<String>) : LanguageIssue()
+    data class Unknown(val key: String) : LanguageIssue()
+    data class Blank(val key: String) : LanguageIssue()
+    data class Newline(val key: String) : LanguageIssue()
+}
 
 sealed class LanguageParse {
     data class Ok(val preview: LanguagePreview) : LanguageParse()
@@ -48,6 +63,7 @@ private data class LanguageTemplateFile(
     val languageTag: String,
     val writtenFor: String,
     val slots: Map<String, String>,
+    val max: Map<String, Int>,
     val strings: Map<String, String>,
 )
 
@@ -98,26 +114,34 @@ object LanguagePack {
         if (name.isEmpty() || name.length > MAX_NAME) return LanguageParse.Reject(LanguageErrors.NOT_PACK)
         val tag = file.languageTag?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_WRITTEN_FOR && tagRe.matches(it) }
         val written = file.writtenFor?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_WRITTEN_FOR }
-        val (accepted, ignored) = acceptLines(file.strings)
-        if (accepted.isEmpty()) return LanguageParse.Reject(LanguageErrors.NONE)
+        val lines = acceptLines(file.strings)
+        if (lines.accepted.isEmpty()) return LanguageParse.Reject(LanguageErrors.NONE)
         val writtenVersion = written?.let { parseVersion(it) }
-        val newSince = writtenVersion?.let { version ->
-            EnglishCopy.lines.count { line ->
-                line.key !in accepted && versionOf(line.addedIn)?.let { compareVersion(it, version) > 0 } == true
-            }
+        val newKeys = if (writtenVersion == null) {
+            emptyList()
+        } else {
+            EnglishCopy.lines.mapNotNull { line ->
+                val added = versionOf(line.addedIn) ?: return@mapNotNull null
+                if (line.key !in lines.accepted && compareVersion(added, writtenVersion) > 0) line.key else null
+            }.sorted()
         }
+        val present = file.strings.keys
+        val missingKeys = EnglishCopy.lines.map { it.key }.filter { it !in present }.sorted()
         return LanguageParse.Ok(
             LanguagePreview(
                 language = name,
                 languageTag = tag,
                 writtenFor = written,
                 formatVersion = file.formatVersion,
-                accepted = accepted,
-                changed = accepted.size,
-                stayEnglish = EnglishCopy.lines.size - accepted.size,
-                ignored = ignored,
-                newSince = newSince,
+                accepted = lines.accepted,
+                changed = lines.accepted.size,
+                stayEnglish = EnglishCopy.lines.size - lines.accepted.size,
+                ignored = lines.ignored,
+                newSince = writtenVersion?.let { newKeys.size },
                 formatNewer = file.formatVersion > EnglishCopy.FORMAT_VERSION,
+                issues = lines.issues,
+                missingKeys = missingKeys,
+                newKeys = newKeys,
             ),
         )
     }
@@ -128,14 +152,76 @@ object LanguagePack {
         if (file.strings.size > MAX_KEYS) return null
         val name = clean(file.language, allowNewline = false).trim()
         if (name.isEmpty() || name.length > MAX_NAME) return null
-        return acceptLines(file.strings).first
+        return acceptLines(file.strings).accepted
+    }
+
+    /** Plain text a translator can send back. Headings stay English, like the author guide. */
+    fun report(preview: LanguagePreview, phoneVersion: String): String {
+        val tooLong = preview.issues.filterIsInstance<LanguageIssue.TooLong>().sortedBy { it.key }
+        val placeholders = preview.issues.filterIsInstance<LanguageIssue.Placeholder>().sortedBy { it.key }
+        val unknown = preview.issues.filterIsInstance<LanguageIssue.Unknown>().map { it.key }.sorted()
+        val blank = preview.issues.filterIsInstance<LanguageIssue.Blank>().map { it.key }.sorted()
+        val newlines = preview.issues.filterIsInstance<LanguageIssue.Newline>().map { it.key }.sorted()
+        val imported = preview.accepted.keys.sorted()
+        return buildString {
+            appendLine("Fieldwatch language pack report")
+            appendLine()
+            appendLine("Language: ${preview.language}")
+            preview.languageTag?.let { appendLine("Tag: $it") }
+            preview.writtenFor?.let { appendLine("Written for $it. This phone is $phoneVersion.") }
+            appendLine()
+            appendLine("A key that is too long, blank, or has the wrong placeholders stays English.")
+            appendLine()
+            appendLine("Imported: ${imported.size}")
+            appendLine("Too long: ${tooLong.size}")
+            appendLine("Missing: ${preview.missingKeys.size}")
+            appendLine("Wrong placeholders: ${placeholders.size}")
+            appendLine("Unknown keys: ${unknown.size}")
+            appendLine("Blank: ${blank.size}")
+            appendLine("Extra line breaks: ${newlines.size}")
+            if (preview.newSince != null) appendLine("New since this pack: ${preview.newKeys.size}")
+            section("Too long", tooLong.map { it.key }) { key ->
+                val hit = tooLong.first { it.key == key }
+                "${hit.length} characters. The limit is ${hit.cap}."
+            }
+            section("Wrong placeholders", placeholders.map { it.key }) { key ->
+                val expected = placeholders.first { it.key == key }.expected.sorted()
+                if (expected.isEmpty()) {
+                    "Keep the same placeholders as the English line."
+                } else {
+                    "Keep ${expected.joinToString(", ") { "{$it}" }}."
+                }
+            }
+            section("Extra line breaks", newlines)
+            section("Blank", blank)
+            section("Unknown keys", unknown)
+            section("Missing", preview.missingKeys)
+            if (preview.newSince != null) section("New since this pack", preview.newKeys)
+            section("Imported", imported)
+        }
+    }
+
+    private fun StringBuilder.section(
+        title: String,
+        keys: List<String>,
+        detail: ((String) -> String)? = null,
+    ) {
+        if (keys.isEmpty()) return
+        appendLine()
+        appendLine(title)
+        for (key in keys) {
+            appendLine(key)
+            detail?.let { appendLine(it(key)) }
+        }
     }
 
     fun template(versionName: String): String {
         val slots = LinkedHashMap<String, String>(EnglishCopy.lines.size)
+        val max = LinkedHashMap<String, Int>(EnglishCopy.lines.size)
         val strings = LinkedHashMap<String, String>(EnglishCopy.lines.size)
         for (line in EnglishCopy.lines) {
             slots[line.key] = EnglishCopy.slotName(line.slot)
+            max[line.key] = EnglishCopy.cap(line)
             strings[line.key] = line.text
         }
         val file = LanguageTemplateFile(
@@ -145,6 +231,7 @@ object LanguagePack {
             languageTag = "en",
             writtenFor = versionName,
             slots = slots,
+            max = max,
             strings = strings,
         )
         return json.encodeToString(LanguageTemplateFile.serializer(), file)
@@ -238,31 +325,43 @@ object LanguagePack {
 
     private fun versionOf(raw: String): List<Int>? = parseVersion(raw)
 
-    private fun acceptLines(strings: Map<String, String>): Pair<Map<String, String>, Int> {
+    private data class AcceptedLines(
+        val accepted: Map<String, String>,
+        val ignored: Int,
+        val issues: List<LanguageIssue>,
+    )
+
+    private fun acceptLines(strings: Map<String, String>): AcceptedLines {
         val accepted = LinkedHashMap<String, String>()
-        var ignored = 0
+        val issues = ArrayList<LanguageIssue>()
         for ((key, value) in strings) {
             val line = EnglishCopy.byKey[key]
             if (line == null) {
-                ignored++
+                issues += LanguageIssue.Unknown(key)
                 continue
             }
             if (value.any { it == '\n' || it == '\r' } && '\n' !in line.text) {
-                ignored++
+                issues += LanguageIssue.Newline(key)
                 continue
             }
             val cleaned = clean(value, allowNewline = '\n' in line.text).trim()
-            if (cleaned.isEmpty() || cleaned.length > EnglishCopy.cap(line)) {
-                ignored++
+            val cap = EnglishCopy.cap(line)
+            if (cleaned.isEmpty()) {
+                issues += LanguageIssue.Blank(key)
                 continue
             }
-            if (placeholderNames(cleaned) != EnglishCopy.placeholders.getValue(key)) {
-                ignored++
+            if (cleaned.length > cap) {
+                issues += LanguageIssue.TooLong(key, cleaned.length, cap)
+                continue
+            }
+            val expected = EnglishCopy.placeholders.getValue(key)
+            if (placeholderNames(cleaned) != expected) {
+                issues += LanguageIssue.Placeholder(key, expected)
                 continue
             }
             accepted[key] = cleaned
         }
-        return accepted to ignored
+        return AcceptedLines(accepted, issues.size, issues)
     }
 
     private fun decodeUtf8(bytes: ByteArray): String? = try {

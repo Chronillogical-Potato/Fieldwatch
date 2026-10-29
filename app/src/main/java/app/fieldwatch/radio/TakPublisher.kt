@@ -3,8 +3,6 @@ package app.fieldwatch.radio
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.ParcelFileDescriptor
-import android.system.OsConstants
 import android.util.Log
 import app.fieldwatch.domain.AppSettings
 import app.fieldwatch.domain.CotEvent
@@ -26,7 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import app.fieldwatch.domain.TakInstall
-import java.io.FileDescriptor
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -38,10 +35,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Sends Cursor-on-Target UDP to ATAK SA multicast or a unicast host:port.
  * Same-phone ATAK often ignores multicast loopback, so unicast also hits
- * 127.0.0.1 on the same port. The loopback socket is pinned to lo before it
- * is bound. A loopback socket opened with no Wi-Fi or Ethernet is replaced
- * once either is connected, including when cellular was already up. One
- * opened on that LAN stays after the LAN drops. A unicast or multicast
+ * 127.0.0.1 on the same port. A loopback socket opened with no Wi-Fi or
+ * Ethernet is replaced once either is connected, including when cellular
+ * was already up. One opened on that LAN stays after the LAN drops. A unicast or multicast
  * socket opened with no network is replaced once a network exists. A socket
  * opened on a network is kept after that network drops. Privacy mode skips the feed.
  */
@@ -61,13 +57,9 @@ class TakPublisher(context: Context? = null) {
     /** True when that socket was opened while the phone had no network. */
     private var multicastOffline = false
     private var unicastOffline = false
-    /** True when the loopback socket is pinned to lo. */
-    private var loopbackOnLo = false
     /** True when the loopback socket was opened while Wi-Fi or Ethernet was connected. */
     private var loopbackOnLan = false
     private var loopbackBirth = TakBirth.NONE
-    /** Exception name when the pin to lo failed. Empty when it succeeded. */
-    private var loopbackBindError: String? = null
     /** Null until a datagram send is attempted. */
     private var lastSendOk: Boolean? = null
     private val _status = MutableStateFlow(TakFeedStatus())
@@ -456,6 +448,19 @@ class TakPublisher(context: Context? = null) {
         }
     }
 
+    /** No-op while TAK is off or Privacy mode has paused the feed. */
+    fun sendNow(settings: AppSettings, packets: List<String>): Boolean {
+        if (!settings.takEnabled || settings.demoMode || packets.isEmpty()) return false
+        val host = settings.takHost.trim().ifBlank { TakDefaults.HOST }
+        val port = settings.takPort.coerceIn(1, 65_535)
+        val dests = destinations(host, port)
+        if (dests.isEmpty()) return false
+        for (xml in packets) {
+            if (!sendAll(dests, xml.toByteArray(Charsets.UTF_8))) return false
+        }
+        return true
+    }
+
     fun close() {
         synchronized(gate) {
             runCatching { multicast?.close() }
@@ -466,10 +471,8 @@ class TakPublisher(context: Context? = null) {
             loopback = null
             multicastOffline = false
             unicastOffline = false
-            loopbackOnLo = false
             loopbackOnLan = false
             loopbackBirth = TakBirth.NONE
-            loopbackBindError = null
         }
         last.clear()
         parked.clear()
@@ -550,8 +553,6 @@ class TakPublisher(context: Context? = null) {
         val open = sock != null && !sock.isClosed
         TakLoopbackFacts(
             open = open,
-            pinned = open && loopbackOnLo,
-            bindError = if (open && !loopbackOnLo) loopbackBindError else null,
             birth = if (open) loopbackBirth else null,
             lastSendOk = lastSendOk,
         )
@@ -587,9 +588,9 @@ class TakPublisher(context: Context? = null) {
     }
 
     /**
-     * 127.0.0.1. Pinned to lo before bind so a cellular-only start can still
-     * reach ATAK. If that pin does not stick, the socket is replaced once
-     * Wi-Fi or Ethernet connects, including when cellular was already up.
+     * 127.0.0.1. A socket opened without Wi-Fi or Ethernet is replaced once
+     * either connects, including when cellular was already up. Android does
+     * not let an app pin this socket to lo, so cellular alone does not deliver.
      */
     private fun loopbackSock(): DatagramSocket = synchronized(gate) {
         val nets = networks()
@@ -599,57 +600,16 @@ class TakPublisher(context: Context? = null) {
         if (open != null) runCatching { open.close() }
         val sock = DatagramSocket(null)
         sock.reuseAddress = true
-        var pinned = pinLoopback(sock)
         try {
             sock.bind(InetSocketAddress(InetAddress.getByAddress(LOOPBACK_V4), 0))
         } catch (err: Exception) {
             runCatching { sock.close() }
             throw err
         }
-        if (!pinned) pinned = pinLoopback(sock)
-        loopbackOnLo = pinned
-        if (pinned) loopbackBindError = null
         loopback = sock
         loopbackOnLan = nets.lan
         loopbackBirth = nets.birth
-        if (pinned) Log.i(TAG, "TAK loopback socket bound to lo")
         sock
-    }
-
-    /**
-     * SetsockoptIfreq is hidden. Pin lo before the socket is bound so Android
-     * does not drop 127.0.0.1 when the default network is cellular or missing.
-     * A failure is retried once after bind. The exception name is kept for Diagnostics.
-     */
-    private fun pinLoopback(sock: DatagramSocket): Boolean {
-        val held = runCatching { ParcelFileDescriptor.fromDatagramSocket(sock) }.getOrElse { err ->
-            loopbackBindError = takBindError(err)
-            Log.w(TAG, "TAK loopback device bind failed: $err")
-            return false
-        }
-        return try {
-            val method = Class.forName("android.system.Os").getMethod(
-                "setsockoptIfreq",
-                FileDescriptor::class.java,
-                Int::class.javaPrimitiveType,
-                Int::class.javaPrimitiveType,
-                String::class.java,
-            )
-            method.invoke(
-                null,
-                held.fileDescriptor,
-                OsConstants.SOL_SOCKET,
-                OsConstants.SO_BINDTODEVICE,
-                LOOPBACK_IF,
-            )
-            true
-        } catch (err: Throwable) {
-            loopbackBindError = takBindError(err)
-            Log.w(TAG, "TAK loopback device bind failed: $err")
-            false
-        } finally {
-            runCatching { held.close() }
-        }
     }
 
     private data class NetFacts(val lan: Boolean, val birth: TakBirth)
@@ -688,7 +648,6 @@ class TakPublisher(context: Context? = null) {
 
     companion object {
         private const val TAG = "FieldwatchTak"
-        private const val LOOPBACK_IF = "lo"
         private val LOOPBACK_V4 = byteArrayOf(127, 0, 0, 1)
         private fun PayloadOk(fix: Pair<Double, Double>): Boolean =
             app.fieldwatch.domain.PayloadLocation.validCoord(fix.first, fix.second)

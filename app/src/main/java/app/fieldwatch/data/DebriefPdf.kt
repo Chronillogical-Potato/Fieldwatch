@@ -496,17 +496,22 @@ object DebriefPdf {
                 isAntiAlias = true
                 letterSpacing = 0.12f
             }
-            canvas.drawText(fig.kicker, MARGIN + 8f, y + 15f, kicker)
+            val kickerLabel = if (fig.kicker == "AIRCRAFT") {
+                LanguageText.text("pdf.aircraft")
+            } else {
+                fig.kicker
+            }
+            canvas.drawText(kickerLabel, MARGIN + 8f, y + 15f, kicker)
             val stats = Paint().apply { color = MUTED; textSize = 8f; isAntiAlias = true }
             val span = if (fig.spanM >= 1000) {
-                "${"%.1f".format(Locale.US, fig.spanM / 1000)} km span"
+                LanguageText.text("pdf.km.span", mapOf("n" to "%.1f".format(Locale.US, fig.spanM / 1000)))
             } else {
-                "${fig.spanM.toInt()} m span"
+                LanguageText.text("pdf.m.span", mapOf("n" to "${fig.spanM.toInt()}"))
             }
             val len = if (fig.lengthM >= 1000) {
-                "${"%.1f".format(Locale.US, fig.lengthM / 1000)} km path"
+                LanguageText.text("pdf.km.path", mapOf("n" to "%.1f".format(Locale.US, fig.lengthM / 1000)))
             } else {
-                "${fig.lengthM.toInt()} m path"
+                LanguageText.text("pdf.m.path", mapOf("n" to "${fig.lengthM.toInt()}"))
             }
             val fixes = fig.tracks.filter { it.aircraft }.sumOf { it.samples.size }
             val right = if (fig.tracks.all { it.aircraft } && fixes == 1) {
@@ -639,12 +644,12 @@ object DebriefPdf {
             isAntiAlias = true
         }
         canvas.drawCircle(nx, ny - 2f, 8f, nDisc)
-        canvas.drawText("N", nx, ny + 1f, nP)
+        canvas.drawText(LanguageText.text("pdf.north"), nx, ny + 1f, nP)
         val barW = plot.width() * lay.scaleBarFrac
         val label = if (lay.scaleBarM >= 1000) {
-            "${(lay.scaleBarM / 1000).toInt()} km"
+            LanguageText.text("pdf.km", mapOf("n" to "${(lay.scaleBarM / 1000).toInt()}"))
         } else {
-            "${lay.scaleBarM.toInt()} m"
+            LanguageText.text("pdf.m", mapOf("n" to "${lay.scaleBarM.toInt()}"))
         }
         val barPaint = Paint().apply {
             color = MUTED
@@ -1318,14 +1323,16 @@ object DebriefPdf {
             val kind = if (d.kind.name == "WIFI") "WIFI" else "BLE"
             val tag = if (d.extraAttention) LanguageText.text("chrome.extra.attention") else null
             val fleets = d.fleetNames.filter { it.isNotBlank() }.joinToString(", ")
-            val obs = d.observerNotes.trim().takeIf { it.isNotEmpty() }?.let { "Observer: $it" }
+            val obs = d.observerNotes.trim().takeIf { it.isNotEmpty() }?.let {
+                LanguageText.text("pdf.observer", mapOf("note" to it))
+            }
             val who = listOfNotNull(kind, d.label.ifBlank { d.mac }, fleets.ifBlank { null }, tag, obs)
                 .joinToString(" ")
             val advertised = d.advertisedNote.trim()
             if (advertised.isEmpty()) who else "$who — $advertised"
         }
         return if (pile.stacked) {
-            "$n  ${pile.members.size} radios at this stop — $radios"
+            "$n  " + LanguageText.text("pdf.stop", mapOf("n" to "${pile.members.size}")) + " — $radios"
         } else {
             "$n  $radios"
         }
@@ -1340,13 +1347,17 @@ object DebriefPdf {
 
     private fun isStayHead(line: String): Boolean {
         val t = line.trim()
-        return t.matches(Regex("""^\d+\.\s+(Stay|Transit)\b.*""")) ||
+        val stay = Regex.escape(LanguageText.text("report.stay.word"))
+        val transit = Regex.escape(LanguageText.text("report.transit.word"))
+        return t.matches(Regex("""^\d+\.\s+(Stay|Transit|$stay|$transit)(?=\s|$).*""")) ||
             t.startsWith("• ")
     }
 
     private fun isKickerLine(line: String): Boolean {
         val t = line.trim()
         if (t.startsWith("Phone GPS")) return true
+        val phone = LanguageText.text("ui.phone.gps.hear.time").take(20)
+        if (phone.isNotEmpty() && t.startsWith(phone)) return true
         if (t.contains(". ")) return false
         return t.matches(Regex("""^[A-Z][A-Za-z0-9 +/'()&.,-]{0,48}:(\s.*)?$"""))
     }
@@ -1499,7 +1510,8 @@ object DebriefPdf {
                 isAntiAlias = true
                 letterSpacing = 0.06f
             }
-            val label = "EXTRA ATTENTION  ·  ${hit.signature}".uppercase()
+            val chrome = LanguageText.text("chrome.extra.attention").uppercase(LanguageText.dateLocale())
+            val label = "$chrome  ·  ${hit.signature.uppercase(Locale.US)}"
             canvas.drawText(label, MARGIN + 10f, y + 14f, kicker)
             var ty = y + 20f
             canvas.save()
@@ -1534,7 +1546,7 @@ object DebriefPdf {
                 typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
                 isAntiAlias = true
             }
-            canvas.drawText("TAKEAWAY", MARGIN + 10f, y + 14f, k)
+            canvas.drawText(LanguageText.text("pdf.takeaway"), MARGIN + 10f, y + 14f, k)
             canvas.save()
             canvas.translate(MARGIN + 10f, y + 20f)
             body.draw(canvas)

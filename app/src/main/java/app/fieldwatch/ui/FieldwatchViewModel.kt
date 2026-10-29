@@ -31,9 +31,9 @@ import app.fieldwatch.domain.gnssSettings
 import app.fieldwatch.data.CatalogRemote
 import app.fieldwatch.data.DebriefPdf
 import app.fieldwatch.data.FlockFiles
+import app.fieldwatch.data.ImportFileException
+import app.fieldwatch.data.ImportFiles
 import app.fieldwatch.data.SensorList
-import app.fieldwatch.data.LanguageFiles
-import app.fieldwatch.data.LanguageRead
 import app.fieldwatch.data.PathTiles
 import app.fieldwatch.data.PlaceLookup
 import app.fieldwatch.domain.DeviceDetailPrompt
@@ -86,11 +86,14 @@ import app.fieldwatch.domain.SignatureEngine
 import app.fieldwatch.domain.SignatureListSort
 import app.fieldwatch.domain.SettingsExchange
 import app.fieldwatch.domain.SettingsPack
+import app.fieldwatch.domain.TrustedBook
+import app.fieldwatch.domain.TrustedNets
+import app.fieldwatch.domain.TwinHear
 import app.fieldwatch.domain.SignatureExchange
 import app.fieldwatch.domain.TakFeedStatus
 import app.fieldwatch.domain.TakInstall
-import app.fieldwatch.domain.LanguageErrors
 import app.fieldwatch.domain.LanguageExportCopy
+import app.fieldwatch.domain.LanguageReportCopy
 import app.fieldwatch.domain.LanguagePack
 import app.fieldwatch.domain.LanguageParse
 import app.fieldwatch.domain.LanguageText
@@ -180,6 +183,10 @@ data class FlockLayerUi(
     val processing: Boolean = false,
     val savedAt: Long = 0L,
     val noticeKey: String? = null,
+    /** Digits for a server status, when [noticeKey] has {code}. */
+    val noticeCode: String = "",
+    /** The next line says the saved copy is unchanged. */
+    val noticeKeep: Boolean = false,
     val confirm: Boolean = false,
     val confirmUpdate: Boolean = false,
     /** False when the saved file is the older Flock-only list. */
@@ -369,6 +376,95 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
 
     fun dismissGnss() {
         app.gnss.dismiss()
+    }
+
+    val trustedNotice = app.trusted.notice
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    val trustedBook = app.trusted.bookFlow
+        .stateIn(viewModelScope, SharingStarted.Eagerly, TrustedBook())
+    val trustedImportProblem = app.trusted.importProblem
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    fun dismissTrusted(ssid: String, bssid: String) {
+        app.trusted.dismiss(ssid, bssid, System.currentTimeMillis())
+        app.alerter.clearTrustedNote()
+    }
+
+    fun learnTrusted(ssid: String, bssid: String) {
+        app.trusted.learnAp(ssid, bssid, System.currentTimeMillis())
+        app.alerter.clearTrustedNote()
+    }
+
+    fun ignoreTrusted(ssid: String, bssid: String) {
+        app.trusted.ignore(ssid, bssid)
+        app.alerter.clearTrustedNote()
+    }
+
+    fun rememberTrusted(ssid: String, bssid: String) {
+        app.trusted.remember(ssid, bssid, System.currentTimeMillis())
+        app.alerter.clearTrustedNote()
+    }
+
+    fun trustNetwork(ssid: String, picks: List<TwinHear>) {
+        if (!TrustedNets.canTrust(ssid, false) || picks.isEmpty()) return
+        app.trusted.trust(ssid, picks, System.currentTimeMillis())
+    }
+
+    fun forgetTrusted(ssid: String) {
+        app.trusted.forget(ssid)
+        app.alerter.clearTrustedNote()
+    }
+
+    fun renameTrusted(ssid: String, label: String) = app.trusted.rename(ssid, label)
+
+    fun setTrustedPaused(ssid: String, paused: Boolean) = app.trusted.setPaused(ssid, paused)
+
+    fun setTrustedTravels(ssid: String, travels: Boolean) = app.trusted.setTravels(ssid, travels)
+
+    fun removeTrustedAp(ssid: String, bssid: String) = app.trusted.removeAp(ssid, bssid)
+
+    fun removeTrustedPlace(ssid: String, index: Int) = app.trusted.removePlace(ssid, index)
+
+    fun stopTrustedIgnore(ssid: String, bssid: String) = app.trusted.stopIgnore(ssid, bssid)
+
+    fun clearTrustedImportFailed() = app.trusted.clearImportFailed()
+
+    fun exportTrustedToUri(uri: Uri) {
+        viewModelScope.launch {
+            runCatching {
+                val json = app.trusted.exportText()
+                withContext(Dispatchers.IO) {
+                    app.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(json.toByteArray(Charsets.UTF_8))
+                    } ?: error(LanguageText.text("ui.could.not.write.location"))
+                }
+            }.onSuccess {
+                _export.value = ExportUi(
+                    noticeTitle = LanguageText.text("trusted.export"),
+                    noticeMessage = LanguageText.text("trusted.export.places"),
+                )
+            }.onFailure { err ->
+                _export.value = ExportUi(
+                    error = err.message ?: LanguageText.text("ui.could.not.write.location"),
+                    errorTitle = LanguageText.text("trusted.export"),
+                )
+            }
+        }
+    }
+
+    fun importTrustedFromUri(uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val text = withContext(Dispatchers.IO) { readImportText(uri, ImportFiles.TRUSTED_MAX) }
+                app.trusted.importText(text)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ImportFileException) {
+                app.trusted.noteImportProblem(e.key)
+            } catch (_: Exception) {
+                app.trusted.noteImportProblem("ui.could.not.read.file")
+            }
+        }
     }
 
     val gnssProfile = app.gnssProfile.profile
@@ -668,17 +764,31 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         super.onCleared()
     }
 
+    /**
+     * Startup refreshes the path on another thread. A lock created later in this
+     * class is still null, and synchronizing on it closes the app.
+     */
+    private val cameraCacheLock = Any()
+    private var cameraCacheStamp = Long.MIN_VALUE
+    @Volatile private var cameraCache: PathCameras.Report? = null
+
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            val header = FlockFiles.peek(app.filesDir, SensorList.PLATES)
-            if (header != null) {
-                _flockLayer.update {
-                    it.copy(savedAt = header.savedAt, fullList = header.version >= FlockFiles.ALL_PLATES)
+            try {
+                val header = FlockFiles.peek(app.filesDir, SensorList.PLATES)
+                if (header != null) {
+                    _flockLayer.update {
+                        it.copy(savedAt = header.savedAt, fullList = header.version >= FlockFiles.ALL_PLATES)
+                    }
                 }
-            }
-            val other = FlockFiles.peek(app.filesDir, SensorList.OTHER)
-            if (other != null) {
-                _sensorLayer.update { it.copy(savedAt = other.savedAt, fullList = true) }
+                val other = FlockFiles.peek(app.filesDir, SensorList.OTHER)
+                if (other != null) {
+                    _sensorLayer.update { it.copy(savedAt = other.savedAt, fullList = true) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The saved date can wait. Startup still opens.
             }
         }
         armLivePath()
@@ -1791,7 +1901,7 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         displayPaused.value = !displayPaused.value
     }
 
-    fun defaultSitName(): String = Sit.defaultName(System.currentTimeMillis())
+    fun defaultSitName(): String = Sit.defaultName(System.currentTimeMillis(), LanguageText.dateLocale())
 
     fun startSit(name: String) {
         viewModelScope.launch {
@@ -2212,7 +2322,7 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                     decaySec = next.decaySec,
                 )
             }
-            if (next.alertVoice || next.gnssVoice || next.anySensorAlert()) app.alerter.prepareVoice()
+            if (next.alertVoice || next.gnssVoice || next.trustedVoice || next.anySensorAlert()) app.alerter.prepareVoice()
             if (layerAlertsChanged(prev, next)) {
                 app.syncFlock(force = prev.flockLayer != next.flockLayer || prev.sensorLayer != next.sensorLayer)
             }
@@ -2242,20 +2352,21 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         val flow = layerFlow(list)
         if (flow.value.busy) return
         if (!on) {
-            flow.update { it.copy(noticeKey = null, confirm = false) }
+            flow.update { it.note(null) }
             updateSettings { if (list == SensorList.PLATES) it.copy(flockLayer = false) else it.copy(sensorLayer = false) }
             return
         }
-        if (FlockFiles.peek(app.filesDir, list) != null || flow.value.savedAt > 0L) {
-            flow.update { it.copy(noticeKey = null, confirm = false) }
+        val saved = runCatching { FlockFiles.peek(app.filesDir, list) }.getOrNull()
+        if (saved != null || flow.value.savedAt > 0L) {
+            flow.update { it.note(null) }
             updateSettings { if (list == SensorList.PLATES) it.copy(flockLayer = true) else it.copy(sensorLayer = true) }
             return
         }
         if (!PlaceLookup.online(app)) {
-            flow.update { it.copy(noticeKey = "settings.layer.needs.network", confirm = false) }
+            flow.update { it.note("settings.layer.needs.network") }
             return
         }
-        flow.update { it.copy(noticeKey = null, confirm = true, confirmUpdate = false) }
+        flow.update { it.note(null, confirm = true) }
     }
 
     private fun updateSensorList(list: SensorList) {
@@ -2263,23 +2374,28 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         val enabled = if (list == SensorList.PLATES) app.config.settings.flockLayer else app.config.settings.sensorLayer
         if (flow.value.busy || !enabled) return
         viewModelScope.launch {
-            if (!PlaceLookup.online(app)) {
-                flow.update { it.copy(noticeKey = "settings.layer.needs.network", confirm = false) }
-                return@launch
-            }
-            val header = withContext(Dispatchers.IO) { FlockFiles.peek(app.filesDir, list) }
-            if (list.refillFlockOnly && header != null && header.version < FlockFiles.ALL_PLATES) {
-                flow.update { it.copy(noticeKey = null, confirm = true, confirmUpdate = true) }
-                return@launch
-            }
-            val probe = withContext(Dispatchers.IO) { FlockFiles.probe(app.filesDir, list) }
-            when (probe) {
-                FlockFiles.Probe.SAME ->
-                    flow.update { it.copy(noticeKey = "settings.layer.current", confirm = false) }
-                FlockFiles.Probe.CHANGED ->
-                    flow.update { it.copy(noticeKey = null, confirm = true, confirmUpdate = true) }
-                FlockFiles.Probe.FAILED ->
-                    flow.update { it.copy(noticeKey = "settings.layer.failed.keep", confirm = false) }
+            try {
+                if (!PlaceLookup.online(app)) {
+                    flow.update { it.note("settings.layer.needs.network") }
+                    return@launch
+                }
+                val header = withContext(Dispatchers.IO) { FlockFiles.peek(app.filesDir, list) }
+                if (list.refillFlockOnly && header != null && header.version < FlockFiles.ALL_PLATES) {
+                    flow.update { it.note(null, confirm = true, confirmUpdate = true) }
+                    return@launch
+                }
+                when (val probe = withContext(Dispatchers.IO) { FlockFiles.probe(app.filesDir, list) }) {
+                    FlockFiles.Probe.Same ->
+                        flow.update { it.note("settings.layer.current") }
+                    FlockFiles.Probe.Changed ->
+                        flow.update { it.note(null, confirm = true, confirmUpdate = true) }
+                    is FlockFiles.Probe.Failed ->
+                        flow.update { it.fail(probe.reason, probe.code, keep = true) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (error: Exception) {
+                flow.update { it.fail(FlockFiles.failReason(error), keep = true) }
             }
         }
     }
@@ -2288,60 +2404,95 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         val flow = layerFlow(list)
         if (flow.value.busy) return
         flow.update {
-            it.copy(confirm = false, busy = true, percent = 0, processing = false, noticeKey = null)
+            it.note(null).copy(busy = true, percent = 0, processing = false)
         }
         viewModelScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                FlockFiles.download(app.filesDir, list) { pct ->
-                    flow.update { row ->
-                        if (pct >= 100) row.copy(processing = true) else row.copy(percent = pct)
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    FlockFiles.download(app.filesDir, list) { pct ->
+                        flow.update { row ->
+                            if (pct >= 100) row.copy(processing = true) else row.copy(percent = pct)
+                        }
                     }
                 }
-            }
-            when (result) {
-                is FlockFiles.Fetch.Saved -> {
-                    flow.update {
-                        it.copy(
-                            busy = false,
-                            processing = false,
-                            percent = 100,
-                            savedAt = result.savedAt,
-                            noticeKey = null,
-                            fullList = true,
-                        )
+                when (result) {
+                    is FlockFiles.Fetch.Saved -> {
+                        flow.update {
+                            it.note(null).copy(
+                                busy = false,
+                                processing = false,
+                                percent = 100,
+                                savedAt = result.savedAt,
+                                fullList = true,
+                            )
+                        }
+                        val already = if (list == SensorList.PLATES) {
+                            app.config.settings.flockLayer
+                        } else {
+                            app.config.settings.sensorLayer
+                        }
+                        if (already) app.syncFlock(force = true)
+                        else updateSettings {
+                            if (list == SensorList.PLATES) it.copy(flockLayer = true) else it.copy(sensorLayer = true)
+                        }
                     }
-                    val already = if (list == SensorList.PLATES) {
-                        app.config.settings.flockLayer
-                    } else {
-                        app.config.settings.sensorLayer
+                    FlockFiles.Fetch.Current -> {
+                        val had = runCatching { FlockFiles.peek(app.filesDir, list) != null }.getOrDefault(false)
+                        flow.update {
+                            it.note(if (had) "settings.layer.current" else "settings.layer.failed.first")
+                                .copy(busy = false, processing = false)
+                        }
                     }
-                    if (already) app.syncFlock(force = true)
-                    else updateSettings {
-                        if (list == SensorList.PLATES) it.copy(flockLayer = true) else it.copy(sensorLayer = true)
-                    }
+                    is FlockFiles.Fetch.Failed -> sensorDownloadFailed(list, result.reason, result.code)
                 }
-                FlockFiles.Fetch.Current -> {
-                    val had = FlockFiles.peek(app.filesDir, list) != null
-                    flow.update {
-                        it.copy(
-                            busy = false,
-                            processing = false,
-                            noticeKey = if (had) "settings.layer.current" else "settings.layer.failed.first",
-                        )
-                    }
-                }
-                FlockFiles.Fetch.Failed -> {
-                    val had = FlockFiles.peek(app.filesDir, list) != null
-                    flow.update {
-                        it.copy(
-                            busy = false,
-                            processing = false,
-                            noticeKey = if (had) "settings.layer.failed.keep" else "settings.layer.failed.first",
-                        )
-                    }
-                }
+            } catch (e: CancellationException) {
+                flow.update { it.copy(busy = false, processing = false) }
+                throw e
+            } catch (error: Exception) {
+                sensorDownloadFailed(list, FlockFiles.failReason(error), 0)
             }
         }
+    }
+
+    /** A failed download names the reason and leaves the row usable. A saved copy stays. */
+    private fun sensorDownloadFailed(list: SensorList, reason: FlockFiles.Reason, code: Int) {
+        val had = runCatching { FlockFiles.peek(app.filesDir, list) != null }.getOrDefault(false)
+        layerFlow(list).update {
+            it.fail(reason, code, keep = had).copy(busy = false, processing = false)
+        }
+    }
+
+    private fun FlockLayerUi.note(
+        key: String?,
+        code: String = "",
+        keep: Boolean = false,
+        confirm: Boolean = false,
+        confirmUpdate: Boolean = false,
+    ) = copy(
+        noticeKey = key,
+        noticeCode = code,
+        noticeKeep = keep,
+        confirm = confirm,
+        confirmUpdate = confirmUpdate,
+    )
+
+    private fun FlockLayerUi.fail(reason: FlockFiles.Reason, code: Int = 0, keep: Boolean) = note(
+        layerFailKey(reason, code),
+        code = if (reason == FlockFiles.Reason.SERVER && code > 0) code.toString() else "",
+        keep = keep,
+    )
+
+    private fun layerFailKey(reason: FlockFiles.Reason, code: Int): String = when (reason) {
+        FlockFiles.Reason.REACH -> "settings.layer.failed.reach"
+        FlockFiles.Reason.TRUST -> "settings.layer.failed.trust"
+        FlockFiles.Reason.SERVER ->
+            if (code > 0) "settings.layer.failed.server.code" else "settings.layer.failed.server"
+        FlockFiles.Reason.SPACE -> "settings.layer.failed.space"
+        FlockFiles.Reason.LARGE -> "settings.layer.failed.large"
+        FlockFiles.Reason.EMPTY -> "settings.layer.failed.empty"
+        FlockFiles.Reason.READ -> "settings.layer.failed.read"
+        FlockFiles.Reason.SAVE -> "settings.layer.failed.save"
+        FlockFiles.Reason.OTHER -> "settings.layer.failed.first"
     }
 
     private fun dismissSensorDownload(list: SensorList) {
@@ -2642,26 +2793,33 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                 spinner = true,
                 message = LanguageText.text("ui.updating.stock.catalog"),
             )
-            runCatching {
-                val text = withContext(Dispatchers.IO) {
-                    CatalogRemote.fetch(
-                        userAgent = "Fieldwatch/${BuildConfig.VERSION_NAME}",
-                    )
+            try {
+                val fetched = withContext(Dispatchers.IO) {
+                    CatalogRemote.fetch(userAgent = "Fieldwatch/${BuildConfig.VERSION_NAME}")
                 }
-                val parsed = SignatureExchange.parsePack(text)
+                if (fetched is CatalogRemote.Fetch.Failed) {
+                    _export.value = catalogFetchFailure(fetched)
+                    return@launch
+                }
+                val parsed = try {
+                    SignatureExchange.parsePack((fetched as CatalogRemote.Fetch.Ok).text)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    showImportProblem(
+                        "ui.could.not.import.catalog",
+                        LanguageText.text("catalog.failed.read"),
+                        kept = true,
+                    )
+                    return@launch
+                }
                 val result = app.config.overlayStockCatalog(parsed.pack)
                     .copy(skippedDecode = parsed.skippedDecode)
-                result.error?.let { throw IllegalStateException(it) }
-                if (!result.alreadyLatest) {
-                    app.devices.refresh(
-                        app.config.fleets,
-                        app.config.settings.staleSec,
-                        policy = app.config.settings.detectionPolicy(),
-                        decaySec = app.config.settings.decaySec,
-                    )
+                if (result.error != null) {
+                    showImportProblem("ui.could.not.import.catalog", result.error, kept = true)
+                    return@launch
                 }
-                result
-            }.onSuccess { result ->
+                if (!result.alreadyLatest) refreshDevicesAfterImport()
                 _export.value = if (result.alreadyLatest) {
                     ExportUi(
                         noticeTitle = LanguageText.text("ui.already.latest.catalog"),
@@ -2687,55 +2845,54 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                         },
                     )
                 }
-            }.onFailure { err ->
-                val msg = err.message.orEmpty()
-                val access = msg.contains("HTTP", ignoreCase = true) ||
-                    msg.contains("Unable to resolve", ignoreCase = true) ||
-                    msg.contains("failed to connect", ignoreCase = true) ||
-                    msg.contains("timeout", ignoreCase = true) ||
-                    msg.contains("GitHub", ignoreCase = true)
-                _export.value = if (access) {
-                    ExportUi(
-                        errorTitle = LanguageText.text("ui.could.not.reach.github"),
-                        error = LanguageText.text("ui.could.not.reach.catalog"),
-                    )
-                } else {
-                    ExportUi(
-                        errorTitle = LanguageText.text("ui.could.not.import.catalog"),
-                        error = err.message ?: LanguageText.text("ui.could.not.import.catalog.2"),
-                    )
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                showImportProblem(
+                    "ui.could.not.import.catalog",
+                    LanguageText.text("import.failed.save"),
+                    kept = false,
+                )
             }
         }
     }
 
     fun importSignaturesFromUri(uri: Uri) {
         viewModelScope.launch {
-            runCatching {
-                val text = withContext(Dispatchers.IO) {
-                    app.contentResolver.openInputStream(uri)?.use {
-                        it.readBytes().toString(Charsets.UTF_8)
-                    } ?: error(LanguageText.text("ui.could.not.read.file"))
+            try {
+                val summary = withContext(Dispatchers.IO) {
+                    val text = readImportText(uri, ImportFiles.SIGNATURE_MAX)
+                    val pack = SignatureExchange.parse(text)
+                    val result = app.config.importFleets(pack.fleets)
+                    if (result.error != null) error(result.error)
+                    result.summary()
                 }
-                val pack = SignatureExchange.parse(text)
-                val result = app.config.importFleets(pack.fleets)
-                if (result.error != null) error(result.error)
-                app.devices.refresh(
-                    app.config.fleets,
-                    app.config.settings.staleSec,
-                    policy = app.config.settings.detectionPolicy(),
-                    decaySec = app.config.settings.decaySec,
-                )
-                result.summary()
-            }.onSuccess { summary ->
+                refreshDevicesAfterImport()
                 _export.value = ExportUi(
                     noticeTitle = LanguageText.text("ui.signatures.imported"),
                     noticeMessage = summary,
                 )
-            }.onFailure { err ->
-                _export.value = ExportUi(
-                    error = err.message ?: LanguageText.text("ui.could.not.import.signatures"),
-                    errorTitle = LanguageText.text("ui.could.not.import.signatures"),
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ImportFileException) {
+                showImportProblem("ui.could.not.import.signatures", LanguageText.text(e.key), kept = true)
+            } catch (e: IllegalArgumentException) {
+                showImportProblem(
+                    "ui.could.not.import.signatures",
+                    e.message ?: LanguageText.text("ui.could.not.import.signatures"),
+                    kept = true,
+                )
+            } catch (e: IllegalStateException) {
+                showImportProblem(
+                    "ui.could.not.import.signatures",
+                    e.message ?: LanguageText.text("ui.could.not.import.signatures"),
+                    kept = true,
+                )
+            } catch (_: Exception) {
+                showImportProblem(
+                    "ui.could.not.import.signatures",
+                    LanguageText.text("import.failed.save"),
+                    kept = false,
                 )
             }
         }
@@ -2813,12 +2970,8 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
 
     fun importSettingsFromUri(uri: Uri) {
         viewModelScope.launch {
-            runCatching {
-                val text = withContext(Dispatchers.IO) {
-                    app.contentResolver.openInputStream(uri)?.use {
-                        it.readBytes().toString(Charsets.UTF_8)
-                    } ?: error(LanguageText.text("ui.could.not.read.file"))
-                }
+            try {
+                val text = withContext(Dispatchers.IO) { readImportText(uri, ImportFiles.SETTINGS_MAX) }
                 val pack = SettingsExchange.parse(text)
                 val warning = SettingsExchange.takImportWarning(app.config.settings, pack.settings)
                 if (warning != null) {
@@ -2826,10 +2979,27 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                 } else {
                     finishSettingsImport(pack)
                 }
-            }.onFailure { err ->
-                _export.value = ExportUi(
-                    error = err.message ?: LanguageText.text("ui.could.not.import.settings"),
-                    errorTitle = LanguageText.text("ui.could.not.import.settings"),
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ImportFileException) {
+                showImportProblem("ui.could.not.import.settings", LanguageText.text(e.key), kept = true)
+            } catch (e: IllegalArgumentException) {
+                showImportProblem(
+                    "ui.could.not.import.settings",
+                    e.message ?: LanguageText.text("ui.could.not.import.settings"),
+                    kept = true,
+                )
+            } catch (e: IllegalStateException) {
+                showImportProblem(
+                    "ui.could.not.import.settings",
+                    e.message ?: LanguageText.text("ui.could.not.import.settings"),
+                    kept = true,
+                )
+            } catch (_: Exception) {
+                showImportProblem(
+                    "ui.could.not.import.settings",
+                    LanguageText.text("import.failed.save"),
+                    kept = false,
                 )
             }
         }
@@ -2839,10 +3009,21 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         val pending = _pendingSettingsImport.value ?: return
         _pendingSettingsImport.value = null
         viewModelScope.launch {
-            runCatching { finishSettingsImport(pending.pack) }.onFailure { err ->
-                _export.value = ExportUi(
-                    error = err.message ?: LanguageText.text("ui.could.not.import.settings"),
-                    errorTitle = LanguageText.text("ui.could.not.import.settings"),
+            try {
+                finishSettingsImport(pending.pack)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IllegalStateException) {
+                showImportProblem(
+                    "ui.could.not.import.settings",
+                    e.message ?: LanguageText.text("ui.could.not.import.settings"),
+                    kept = true,
+                )
+            } catch (_: Exception) {
+                showImportProblem(
+                    "ui.could.not.import.settings",
+                    LanguageText.text("import.failed.save"),
+                    kept = false,
                 )
             }
         }
@@ -2863,22 +3044,22 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
 
     fun importLanguageFromUri(uri: Uri) {
         viewModelScope.launch {
-            val parsed = withContext(Dispatchers.IO) {
-                val read = app.contentResolver.openInputStream(uri)?.use {
-                    LanguageFiles.readCapped(it)
+            try {
+                val bytes = withContext(Dispatchers.IO) {
+                    readImportBytes(uri, LanguagePack.MAX_BYTES)
                 }
-                when (read) {
-                    null -> LanguageParse.Reject(LanguageErrors.NOT_PACK)
-                    LanguageRead.Empty -> LanguageParse.Reject(LanguageErrors.EMPTY)
-                    LanguageRead.TooBig -> LanguageParse.Reject(LanguageErrors.LARGE)
-                    is LanguageRead.Bytes -> LanguagePack.parse(read.bytes)
+                when (val parsed = LanguagePack.parse(bytes)) {
+                    is LanguageParse.Reject ->
+                        _language.value = _language.value.copy(pending = null, errorKey = parsed.messageKey)
+                    is LanguageParse.Ok ->
+                        _language.value = _language.value.copy(pending = parsed.preview, errorKey = null)
                 }
-            }
-            when (parsed) {
-                is LanguageParse.Reject ->
-                    _language.value = _language.value.copy(pending = null, errorKey = parsed.messageKey)
-                is LanguageParse.Ok ->
-                    _language.value = _language.value.copy(pending = parsed.preview, errorKey = null)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: ImportFileException) {
+                _language.value = _language.value.copy(pending = null, errorKey = e.key)
+            } catch (_: Exception) {
+                _language.value = _language.value.copy(pending = null, errorKey = "ui.could.not.read.file")
             }
         }
     }
@@ -2886,15 +3067,47 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
     fun confirmLanguageImport() {
         val pending = _language.value.pending ?: return
         viewModelScope.launch {
-            val snap = withContext(Dispatchers.IO) {
-                app.language.confirm(pending, java.util.Locale.getDefault())
+            try {
+                val snap = withContext(Dispatchers.IO) {
+                    app.language.confirm(pending, java.util.Locale.getDefault())
+                }
+                publishLanguage(snap)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                _language.value = _language.value.copy(pending = null, errorKey = "import.failed.save")
             }
-            publishLanguage(snap)
         }
     }
 
     fun cancelLanguageImport() {
         _language.value = _language.value.copy(pending = null)
+    }
+
+    fun startLanguageReportShare() {
+        val pending = _language.value.pending ?: return
+        viewModelScope.launch {
+            runCatching {
+                val text = withContext(Dispatchers.Default) {
+                    LanguagePack.report(pending, BuildConfig.VERSION_NAME)
+                }
+                val dir = java.io.File(app.cacheDir, "language").apply { mkdirs() }
+                val file = java.io.File(dir, LanguageReportCopy.FILE)
+                withContext(Dispatchers.IO) { file.writeText(text) }
+                val uri = FileProvider.getUriForFile(app, "${app.packageName}.files", file)
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    clipData = ClipData.newRawUri("language-report", uri)
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, LanguageReportCopy.SHARE)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }.onSuccess { intent ->
+                _export.value = ExportUi(share = intent, shareTitle = LanguageReportCopy.SHARE)
+            }.onFailure {
+                _language.value = _language.value.copy(errorKey = "language.report.failed")
+            }
+        }
     }
 
     fun dismissLanguageError() {
@@ -2962,8 +3175,76 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         pending: app.fieldwatch.domain.LanguagePreview? = null,
         errorKey: String? = null,
     ) {
-        LanguageText.apply(snap.overlay)
+        LanguageText.apply(snap.overlay, snap.activeTag)
         _language.value = LanguageUiState(snap, pending, errorKey)
+    }
+
+    private fun readImportBytes(uri: Uri, maxBytes: Int): ByteArray {
+        try {
+            val stream = app.contentResolver.openInputStream(uri)
+                ?: throw ImportFileException("ui.could.not.read.file")
+            return stream.use { ImportFiles.read(it, maxBytes) }
+        } catch (e: ImportFileException) {
+            throw e
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            throw ImportFileException("ui.could.not.read.file")
+        }
+    }
+
+    private fun readImportText(uri: Uri, maxBytes: Int): String =
+        readImportBytes(uri, maxBytes).toString(Charsets.UTF_8)
+
+    /** A failed import names the reason. [kept] adds that this phone was not changed. */
+    private fun showImportProblem(titleKey: String, body: String, kept: Boolean) {
+        val text = if (kept) body.trim() + " " + LanguageText.text("import.failed.kept") else body
+        _export.value = ExportUi(
+            errorTitle = LanguageText.text(titleKey),
+            error = text,
+        )
+    }
+
+    private fun catalogFetchFailure(failed: CatalogRemote.Fetch.Failed): ExportUi {
+        val reason = failed.reason
+        val code = failed.code
+        val titleKey = if (reason == CatalogRemote.Reason.REACH) {
+            "ui.could.not.reach.github"
+        } else {
+            "ui.could.not.import.catalog"
+        }
+        val bodyKey = when (reason) {
+            CatalogRemote.Reason.REACH -> "ui.could.not.reach.catalog"
+            CatalogRemote.Reason.TRUST -> "settings.layer.failed.trust"
+            CatalogRemote.Reason.SERVER ->
+                if (code > 0) "catalog.failed.server.code" else "catalog.failed.server"
+            CatalogRemote.Reason.LARGE -> "language.err.large"
+            CatalogRemote.Reason.EMPTY -> "catalog.failed.empty"
+            CatalogRemote.Reason.OTHER -> "ui.could.not.import.catalog.2"
+        }
+        val body = if (reason == CatalogRemote.Reason.SERVER && code > 0) {
+            LanguageText.text(bodyKey, mapOf("code" to code.toString()))
+        } else {
+            LanguageText.text(bodyKey)
+        }
+        val text = body.trim() + " " + LanguageText.text("import.failed.kept")
+        return ExportUi(errorTitle = LanguageText.text(titleKey), error = text)
+    }
+
+    /** The pack is already saved. A refresh failure must not look like a bad file. */
+    private suspend fun refreshDevicesAfterImport() {
+        try {
+            app.devices.refresh(
+                app.config.fleets,
+                app.config.settings.staleSec,
+                policy = app.config.settings.detectionPolicy(),
+                decaySec = app.config.settings.decaySec,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // The live list catches up on the next hear.
+        }
     }
 
     private suspend fun finishSettingsImport(pack: SettingsPack) {
@@ -2988,7 +3269,7 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
             policy = next.detectionPolicy(),
             decaySec = next.decaySec,
         )
-        if (next.alertVoice || next.gnssVoice || next.anySensorAlert()) app.alerter.prepareVoice()
+        if (next.alertVoice || next.gnssVoice || next.trustedVoice || next.anySensorAlert()) app.alerter.prepareVoice()
         if (layerAlertsChanged(prev, next)) {
             app.syncFlock(force = prev.flockLayer != next.flockLayer || prev.sensorLayer != next.sensorLayer)
         }
@@ -3069,45 +3350,40 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
 
     fun refreshSitPath() {
         viewModelScope.launch(Dispatchers.Default) {
-            val cameras = withContext(Dispatchers.IO) { cachedCameraReport() }
-            val model = buildSitPath(cameras)
-            _sitPath.value = model
-            val settings = app.config.settings
-            if (!settings.onlineLookup) {
-                _pathTiles.value = emptyList()
-                _pathAircraftTiles.value = emptyList()
-                _pathZoomIn.value = false
+            val cameras = try {
+                withContext(Dispatchers.IO) { cachedCameraReport() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyCameraReport()
+            }
+            val model = try {
+                buildSitPath(cameras)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
                 return@launch
             }
-            val phone = Geo.despikePath(model.samples).let { if (it.size >= 2) it else model.samples }
-            val walk = phone + model.craft.flatMap { it.samples }
-            if (walk.isEmpty()) {
-                if (!sitPathHeld) {
+            _sitPath.value = model
+            try {
+                val settings = app.config.settings
+                if (!settings.onlineLookup) {
                     _pathTiles.value = emptyList()
+                    _pathAircraftTiles.value = emptyList()
                     _pathZoomIn.value = false
+                    return@launch
                 }
-            } else if (!sitPathHeld) {
-                val batch = runCatching {
-                    PathTiles.load(
-                        app, walk,
-                        onlineLookup = settings.onlineLookup,
-                        basemap = settings.mapBasemap,
-                        mapKey = keyFor(settings.mapBasemap),
-                        overlays = settings.mapOverlays,
-                    )
-                }.getOrDefault(PathTiles.Batch(problem = if (settings.mapBasemap.needsKey) MapKeyProblem.FAILED else MapKeyProblem.NONE))
-                noteMapTiles(settings.mapBasemap, batch.problem)
-                _pathZoomIn.value = batch.zoomIn
-                _pathTiles.value = if (batch.zoomIn) emptyList() else batch.tiles
-            }
-            _pathAircraftTiles.value = model.aircraftCards.map { card ->
-                val samples = card.craft.flatMap { it.samples }
-                if (samples.isEmpty()) {
-                    emptyList()
-                } else {
+                val phone = Geo.despikePath(model.samples).let { if (it.size >= 2) it else model.samples }
+                val walk = phone + model.craft.flatMap { it.samples }
+                if (walk.isEmpty()) {
+                    if (!sitPathHeld) {
+                        _pathTiles.value = emptyList()
+                        _pathZoomIn.value = false
+                    }
+                } else if (!sitPathHeld) {
                     val batch = runCatching {
                         PathTiles.load(
-                            app, samples,
+                            app, walk,
                             onlineLookup = settings.onlineLookup,
                             basemap = settings.mapBasemap,
                             mapKey = keyFor(settings.mapBasemap),
@@ -3115,8 +3391,31 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                         )
                     }.getOrDefault(PathTiles.Batch(problem = if (settings.mapBasemap.needsKey) MapKeyProblem.FAILED else MapKeyProblem.NONE))
                     noteMapTiles(settings.mapBasemap, batch.problem)
-                    batch.tiles
+                    _pathZoomIn.value = batch.zoomIn
+                    _pathTiles.value = if (batch.zoomIn) emptyList() else batch.tiles
                 }
+                _pathAircraftTiles.value = model.aircraftCards.map { card ->
+                    val samples = card.craft.flatMap { it.samples }
+                    if (samples.isEmpty()) {
+                        emptyList()
+                    } else {
+                        val batch = runCatching {
+                            PathTiles.load(
+                                app, samples,
+                                onlineLookup = settings.onlineLookup,
+                                basemap = settings.mapBasemap,
+                                mapKey = keyFor(settings.mapBasemap),
+                                overlays = settings.mapOverlays,
+                            )
+                        }.getOrDefault(PathTiles.Batch(problem = if (settings.mapBasemap.needsKey) MapKeyProblem.FAILED else MapKeyProblem.NONE))
+                        noteMapTiles(settings.mapBasemap, batch.problem)
+                        batch.tiles
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // The path is already on screen. Map pictures can wait.
             }
         }
     }
@@ -3317,10 +3616,6 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    private val cameraCacheLock = Any()
-    private var cameraCacheStamp = Long.MIN_VALUE
-    private var cameraCache: PathCameras.Report? = null
-
     /** Length and time of the two list files. A change reloads them. */
     private fun cameraStamp(): Long {
         fun part(list: SensorList): Long {
@@ -3333,22 +3628,29 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         return plates xor other.rotateLeft(1) xor if (plates == 0L && other == 0L) 1L else 0L
     }
 
-    /** Same lists as [cameraReport], kept until a file on disk changes. */
+    /** Same lists as [cameraReport], kept until a file on disk changes. A failed read keeps the last good copy. */
     private fun cachedCameraReport(): PathCameras.Report {
-        val stamp = cameraStamp()
-        synchronized(cameraCacheLock) {
-            val held = cameraCache
-            if (held != null && stamp == cameraCacheStamp) return held
+        try {
+            val stamp = cameraStamp()
+            synchronized(cameraCacheLock) {
+                val held = cameraCache
+                if (held != null && stamp == cameraCacheStamp) return held
+            }
+            val fresh = cameraReport()
+            synchronized(cameraCacheLock) {
+                cameraCache = fresh
+                cameraCacheStamp = stamp
+            }
+            return fresh
+        } catch (_: Exception) {
+            return cameraCache ?: emptyCameraReport()
         }
-        val fresh = cameraReport()
-        synchronized(cameraCacheLock) {
-            cameraCache = fresh
-            cameraCacheStamp = stamp
-        }
-        return fresh
     }
 
-    /** Lists saved on this phone. A layer that is off still counts if its file is here. */
+    private fun emptyCameraReport(): PathCameras.Report =
+        PathCameras.Report(plates = false, others = false) { _, _, _ -> emptyList() }
+
+    /** Both saved lists. The sit report and Reports → Path leave out a layer whose switch is off. */
     private fun cameraReport(): PathCameras.Report {
         val plates = FlockFiles.read(app.filesDir, SensorList.PLATES)?.cameras
         val others = FlockFiles.read(app.filesDir, SensorList.OTHER)?.cameras
@@ -3392,6 +3694,10 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
         }
         publishExport(0.32f, LanguageText.text("ui.building.debrief"))
         val cameras = withContext(Dispatchers.IO) { cachedCameraReport() }
+        val trustedLines = app.trusted.linesIn(
+            window?.startAt ?: (now - 15 * 60_000L),
+            window?.endAt ?: now,
+        )
         return withContext(Dispatchers.Default) {
             DebriefReport.document(
                 devices = devices,
@@ -3410,8 +3716,9 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                 gnss = source?.gnss ?: app.gnss.marks(),
                 placeRecords = if (settings.placeWatch) app.places.snapshot() else emptyList(),
                 cameras = cameras,
+                trusted = trustedLines,
             ).withDemoMacs(
-                devices.map { it.mac },
+                devices.map { it.mac } + trustedLines.map { it.bssid },
                 settings.demoMode,
                 devices.mapNotNull { it.payloadUasId },
             )
@@ -3450,6 +3757,10 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                 }
                 publishExport(0.4f, LanguageText.text("ui.building.ai.export.prompt"))
                 val cameras = withContext(Dispatchers.IO) { cachedCameraReport() }
+                val trustedLines = app.trusted.linesIn(
+                    window?.startAt ?: (now - 15 * 60_000L),
+                    window?.endAt ?: now,
+                )
                 val text = withContext(Dispatchers.Default) {
                     val raw = DebriefPrompt.build(
                         devices = devices,
@@ -3467,10 +3778,11 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                         gnss = source?.gnss ?: app.gnss.marks(),
                         placeRecords = if (settings.placeWatch) app.places.snapshot() else emptyList(),
                         cameras = cameras,
+                        trusted = trustedLines,
                     )
                     val masked = MacUtil.redactPrivateText(
                         raw,
-                        devices.map { it.mac },
+                        devices.map { it.mac } + trustedLines.map { it.bssid },
                         devices.mapNotNull { it.payloadUasId },
                         settings.demoMode,
                     )
@@ -3553,7 +3865,7 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                         settings.demoMode,
                     )
                     if (settings.demoMode) {
-                        "Privacy mode: MAC tails are **:**:**. UAS ids and GPS coordinates are masked. Logs on the phone are unchanged.\n\n$masked"
+                        "Privacy mode: MAC tails are **:**:**. UAS ids, GPS coordinates, and raw advertisement bytes are masked. Logs on the phone are unchanged.\n\n$masked"
                     } else {
                         masked
                     }
@@ -3609,7 +3921,7 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
                         settings.demoMode,
                     )
                     if (settings.demoMode) {
-                        "Privacy mode: MAC tails are **:**:**. UAS ids and GPS coordinates are masked. Logs on the phone are unchanged.\n\n$masked"
+                        "Privacy mode: MAC tails are **:**:**. UAS ids, GPS coordinates, and raw advertisement bytes are masked. Logs on the phone are unchanged.\n\n$masked"
                     } else {
                         masked
                     }

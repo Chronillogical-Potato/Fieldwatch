@@ -240,6 +240,7 @@ fun LanguageOverlays(
     state: LanguageUiState,
     onConfirmImport: () -> Unit,
     onCancelImport: () -> Unit,
+    onSaveReport: () -> Unit,
     onDismissError: () -> Unit,
     onDismissAi: () -> Unit,
 ) {
@@ -249,7 +250,14 @@ fun LanguageOverlays(
             title = {
                 Text(LanguageText.text("language.confirm.title", mapOf("language" to pending.language)))
             },
-            text = { Text(confirmBody(pending)) },
+            text = {
+                Column {
+                    Text(confirmBody(pending))
+                    TextButton(onClick = onSaveReport) {
+                        Text(LanguageText.text("language.report.save"))
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(onClick = onConfirmImport) {
                     Text(LanguageText.text("language.import.action"))

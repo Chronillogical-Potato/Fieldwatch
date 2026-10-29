@@ -34,9 +34,9 @@ object Sit {
         val h = s / 3600L
         val m = (s % 3600L) / 60L
         return when {
-            h > 0L -> "$h h $m min"
-            m > 0L -> "$m min"
-            else -> "$s s"
+            h > 0L -> LanguageText.text("sit.hm", mapOf("h" to "$h", "m" to "$m"))
+            m > 0L -> LanguageText.text("sit.m", mapOf("m" to "$m"))
+            else -> LanguageText.text("sit.s", mapOf("s" to "$s"))
         }
     }
 
@@ -46,7 +46,10 @@ object Sit {
     fun dropWarning(closed: List<SitSummary>): String? {
         if (closed.size < CLOSED_CAP) return null
         val oldest = closed.lastOrNull() ?: return null
-        return "You already have $CLOSED_CAP saved sits. When you end this one, the oldest (“${oldest.name}”) will be deleted."
+        return LanguageText.text(
+            "sit.drop",
+            mapOf("n" to CLOSED_CAP.toString(), "name" to oldest.name),
+        )
     }
 
     fun pinned(
@@ -133,6 +136,10 @@ data class SitRadio(
     val gpsTrail: List<GpsSample> = emptyList(),
     /** Live-row labels captured at hear-time. Saved sits do not keep the advertisement bytes. */
     val liveDecode: List<LiveDecodeChip> = emptyList(),
+    /** Separated SmartTag privacy ID. Kept only as long as this sit keeps the radio. Not a device key. */
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val smartTagId: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val payloadAt: Long? = null,
@@ -191,6 +198,7 @@ data class SitRadio(
         payloadOpAlt = payloadOpAlt,
         payloadTrail = payloadTrail,
         liveDecode = liveDecode,
+        smartTagId = smartTagId,
         payloadAt = payloadAt,
         payloadPhoneLat = payloadPhoneLat,
         payloadPhoneLon = payloadPhoneLon,
@@ -232,6 +240,7 @@ data class SitRadio(
             payloadTrail = AircraftTrail.append(emptyList(), device),
             gpsTrail = trailSample(device),
             liveDecode = device.liveDecode,
+            smartTagId = SmartTag.separatedId(device),
             payloadAt = device.payloadAt,
             payloadPhoneLat = device.payloadPhoneLat,
             payloadPhoneLon = device.payloadPhoneLon,
@@ -567,6 +576,7 @@ class SitSession(
             payloadTrail = AircraftTrail.append(old.payloadTrail, next),
             gpsTrail = trail,
             liveDecode = next.liveDecode.ifEmpty { old.liveDecode },
+            smartTagId = SmartTag.separatedId(next),
             payloadAt = next.payloadAt ?: old.payloadAt,
             payloadPhoneLat = if (next.payloadAt != null) next.payloadPhoneLat else old.payloadPhoneLat,
             payloadPhoneLon = if (next.payloadAt != null) next.payloadPhoneLon else old.payloadPhoneLon,

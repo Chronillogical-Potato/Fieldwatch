@@ -249,15 +249,19 @@ object AircraftTrail {
             craftKeys = base.craftKeys + near.map { pathKeyLine(it) },
             spanM = Geo.spanM(framed),
             caption = if (secondary) {
-                if ("second sit’s advertised track" in base.caption) {
+                val line = LanguageText.text("report.craft.second")
+                if (line in base.caption || "second sit’s advertised track" in base.caption) {
                     base.caption
                 } else {
-                    base.caption + " A blue dotted line is the second sit’s advertised track within 2 km of this path."
+                    base.caption + " " + line
                 }
-            } else if ("black dotted line is an advertised track" in base.caption) {
-                base.caption
             } else {
-                base.caption + " A black dotted line is an advertised track within 2 km of this path."
+                val line = LanguageText.text("report.craft.near")
+                if (line in base.caption || "black dotted line is an advertised track" in base.caption) {
+                    base.caption
+                } else {
+                    base.caption + " " + line
+                }
             },
         )
     }
@@ -294,10 +298,8 @@ object AircraftTrail {
                 lengthM = maxOf(lenA, lenB),
                 spanM = Geo.spanM(samples),
                 caption = when {
-                    a != null && b != null ->
-                        "North-up. Black dots are this sit. Blue dots are the second sit. The marker is the last advertised position."
-                    b != null ->
-                        "North-up. The blue dotted line is the advertised track for ${b.title}. The marker is the last advertised position."
+                    a != null && b != null -> LanguageText.text("report.craft.compare")
+                    b != null -> LanguageText.text("report.craft.blue", mapOf("name" to b.title))
                     else -> aircraftCaption(a!!)
                 },
                 pilots = listOfNotNull(a?.let { pilotMark(it) }, b?.let { pilotMark(it) }),
@@ -354,7 +356,8 @@ object AircraftTrail {
         val tracks = fig.tracks.filter { it.aircraft }.ifEmpty { fig.tracks }
         val fixes = tracks.flatMap { it.samples }
         val frames = fixes + fig.pilots.map { GpsSample(0L, it.lat, it.lon, 0) }
-        val title = tracks.firstOrNull()?.name?.takeIf { it.isNotBlank() } ?: "Aircraft"
+        val title = tracks.firstOrNull()?.name?.takeIf { it.isNotBlank() }
+            ?: LanguageText.text("ui.aircraft.label")
         return SitPathPlot.Model(
             samples = emptyList(),
             dots = dots,
@@ -383,9 +386,9 @@ object AircraftTrail {
 
     private fun aircraftCaption(pic: Picture): String {
         return if (pic.fixes.size < 2) {
-            "Last advertised position for ${pic.title}. The marker is that position."
+            LanguageText.text("report.craft.last", mapOf("name" to pic.title))
         } else {
-            "North-up. The black dotted line is the advertised track for ${pic.title}. The marker is the last advertised position."
+            LanguageText.text("report.craft.black", mapOf("name" to pic.title))
         }
     }
 
