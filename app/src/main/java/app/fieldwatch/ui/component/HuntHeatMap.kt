@@ -136,7 +136,20 @@ fun HuntHeatMap(
             courseDeg,
         )
     }
-    val layout = remember(model, boxSize, viewport, appliedCourse) {
+    // Drawn angle turns through the gap between GPS courses. Tiles stay on the heading reached.
+    val drawnCourse = rememberEasedCourse(appliedCourse)
+    val layout = remember(model, boxSize, viewport, drawnCourse) {
+        if (boxSize.width < 8 || boxSize.height < 8) null
+        else SitPathPlot.layout(
+            model,
+            boxSize.width.toFloat(),
+            boxSize.height.toFloat(),
+            viewport = viewport,
+            minHalfM = HuntHeat.PINCH_HALF_M,
+            courseDeg = drawnCourse,
+        )
+    }
+    val tileLayout = remember(model, boxSize, viewport, appliedCourse) {
         if (boxSize.width < 8 || boxSize.height < 8) null
         else SitPathPlot.layout(
             model,
@@ -149,8 +162,8 @@ fun HuntHeatMap(
     }
     val onTileWindowRef = remember { mutableStateOf(onTileWindow) }
     onTileWindowRef.value = onTileWindow
-    LaunchedEffect(layout) {
-        val window = layout?.tileWindow() ?: return@LaunchedEffect
+    LaunchedEffect(tileLayout) {
+        val window = tileLayout?.tileWindow() ?: return@LaunchedEffect
         onTileWindowRef.value?.invoke(window)
     }
     // Rebuild only when the trail changes. A pinch reuses this picture.
@@ -164,7 +177,7 @@ fun HuntHeatMap(
     layoutRef.value = layout
     viewportRef.value = viewport
     onViewportRef.value = onViewport
-    courseRef.value = appliedCourse
+    courseRef.value = drawnCourse
     onToggleRef.value = onToggleClose
     val gestures = Modifier.pointerInput(Unit) {
         val slop = viewConfiguration.touchSlop
@@ -351,7 +364,7 @@ fun HuntHeatMap(
         if (onRotate != null) {
             MapCompassButton(
                 frame = mapFrame,
-                northDeg = appliedCourse,
+                northDeg = drawnCourse,
                 onClick = onRotate,
                 modifier = Modifier.align(Alignment.BottomEnd).padding(end = 4.dp, bottom = 2.dp),
             )

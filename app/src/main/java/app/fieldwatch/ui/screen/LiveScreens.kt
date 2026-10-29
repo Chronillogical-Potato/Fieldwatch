@@ -490,7 +490,11 @@ private fun LivePathSplit(
     val basemap = state.settings.mapBasemap
     val overlays = state.settings.mapOverlays
     val mapKeyRev by vm.mapKeyRevision.collectAsStateWithLifecycle()
-    val mapFrame = MapFrame.resolved(state.settings.mapFrame, state.settings.mapRotate)
+    val pendingFrame by vm.shownMapFrame.collectAsStateWithLifecycle()
+    val mapFrame = MapFrame.onScreen(
+        pendingFrame,
+        MapFrame.resolved(state.settings.mapFrame, state.settings.mapRotate),
+    )
     val tileKey = remember(state.operatorPath, online, basemap, overlays, mapKeyRev) {
         livePathTileKey(state.operatorPath, online, basemap, overlays, mapKeyRev)
     }
@@ -502,6 +506,12 @@ private fun LivePathSplit(
     val courseKey = if (course.isFinite()) (course / MapLookAhead.TURN_DEG).toInt() else Int.MIN_VALUE
     val heldMap = viewport != null
     val screenTip = if (!heldMap && tileWindow == null) tipBucket else ""
+    // The list and the rest of this page draw first. The path lays out on the next frame.
+    var showMap by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        showMap = true
+    }
     LaunchedEffect(tileKey, mapFrame, tileWindowKey, heldMap, screenTip) {
         val held = viewport
         val window = tileWindow
@@ -569,7 +579,9 @@ private fun LivePathSplit(
                 .fillMaxWidth()
                 .clipToBounds(),
         ) {
-            if (state.operatorPath.isEmpty() && model.dots.isEmpty()) {
+            if (!showMap && (state.operatorPath.isNotEmpty() || model.dots.isNotEmpty())) {
+                // Waiting one frame keeps a long path from holding up the list.
+            } else if (state.operatorPath.isEmpty() && model.dots.isEmpty()) {
                 Text(
                     if (state.settings.tagLocation) {
                         LanguageText.text("ui.waiting.gps.fix")

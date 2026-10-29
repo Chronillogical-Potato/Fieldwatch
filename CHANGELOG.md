@@ -4,6 +4,12 @@ Newest first. This is Fieldwatch (`app.fieldwatch`). Each build below is what Se
 
 Fieldwatch continues the Spectre 1.2.14 field build under a new name, application id, and the MIT License. It does not replace Spectre on a phone.
 
+## 1.1.37 — 29 October 2026
+
+- Show live path and Hunt turn with the heading as it changes. The map already on screen turns with it, so the edges stay filled. Standing still, or turning the phone in place, leaves the map where it is.
+- A double-tap on Show live path or Hunt switches between the close view and the whole path right away.
+- Coming back to the live list draws the list first. The map follows.
+
 ## 1.1.36 — 29 October 2026
 
 - A trusted-network warning for the address 00:13:37 says that block belongs to Orient Power Home Network.

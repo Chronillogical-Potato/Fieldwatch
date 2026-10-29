@@ -128,6 +128,7 @@ fun HuntScreen(
     val basemap = ui.settings.mapBasemap
     val overlays = ui.settings.mapOverlays
     val mapKeyRev by vm.mapKeyRevision.collectAsStateWithLifecycle()
+    val pendingFrame by vm.shownMapFrame.collectAsStateWithLifecycle()
     var tileWindow by remember { mutableStateOf<DoubleArray?>(null) }
     val tileWindowKey = tileWindow?.let { SitPathPlot.tileWindowKey(it) }.orEmpty()
     val course = ui.travelDeg
@@ -320,7 +321,10 @@ fun HuntScreen(
                         viewport = viewport,
                         onViewport = { viewport = it },
                         courseDeg = ui.travelDeg,
-                        mapFrame = MapFrame.resolved(ui.settings.mapFrame, ui.settings.mapRotate),
+                        mapFrame = MapFrame.onScreen(
+                            pendingFrame,
+                            MapFrame.resolved(ui.settings.mapFrame, ui.settings.mapRotate),
+                        ),
                         onRotate = { vm.cycleMapFrame() },
                         onToggleClose = { vm.toggleMapClose() },
                         flock = showFlock,

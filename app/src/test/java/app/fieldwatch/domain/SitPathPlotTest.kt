@@ -1226,6 +1226,17 @@ class SitPathPlotTest {
         assertTrue(MapFrame.drawnCourse(MapFrame.NORTH, 90.0, 10.0).isNaN())
         assertTrue(MapFrame.drawnCourse(MapFrame.CLOSE_NORTH, 90.0, 10.0).isNaN())
         assertTrue(MapFrame.drawnCourse(MapFrame.TRAVEL, null, Double.NaN).isNaN())
+        assertEquals(20.0, MapFrame.shortestTurn(350.0, 10.0), 0.0)
+        assertEquals(-20.0, MapFrame.shortestTurn(10.0, 350.0), 0.0)
+        assertEquals(0.0, MapFrame.shortestTurn(40.0, 40.0), 0.0)
+        assertEquals(0.0, MapFrame.shortestTurn(Double.NaN, 10.0), 0.0)
+        assertEquals(200, MapFrame.courseTurnMs(0L))
+        assertEquals(200, MapFrame.courseTurnMs(50L))
+        assertEquals(1_000, MapFrame.courseTurnMs(1_000L))
+        assertEquals(1_000, MapFrame.courseTurnMs(4_000L))
+        assertEquals(MapFrame.CLOSE, MapFrame.onScreen(MapFrame.CLOSE, MapFrame.TRAVEL))
+        assertEquals(MapFrame.TRAVEL, MapFrame.onScreen(MapFrame.TRAVEL, MapFrame.TRAVEL))
+        assertEquals(MapFrame.NORTH, MapFrame.onScreen(null, MapFrame.NORTH))
     }
 
     @Test

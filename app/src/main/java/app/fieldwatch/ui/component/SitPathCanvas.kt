@@ -200,7 +200,20 @@ fun SitPathCanvas(
     } else {
         0f
     }
-    val layout = remember(model, boxSize, viewport, appliedCourse, followHalfM) {
+    // Drawn angle turns through the gap between GPS courses. Tiles stay on the heading reached.
+    val drawnCourse = rememberEasedCourse(appliedCourse)
+    val layout = remember(model, boxSize, viewport, drawnCourse, followHalfM) {
+        if (boxSize.width < 8 || boxSize.height < 8) null
+        else SitPathPlot.layout(
+            model,
+            boxSize.width.toFloat(),
+            boxSize.height.toFloat(),
+            viewport = viewport,
+            followHalfM = followHalfM,
+            courseDeg = drawnCourse,
+        )
+    }
+    val tileLayout = remember(model, boxSize, viewport, appliedCourse, followHalfM) {
         if (boxSize.width < 8 || boxSize.height < 8) null
         else SitPathPlot.layout(
             model,
@@ -213,8 +226,8 @@ fun SitPathCanvas(
     }
     val onTileWindowRef = remember { mutableStateOf(onTileWindow) }
     onTileWindowRef.value = onTileWindow
-    LaunchedEffect(layout) {
-        val window = layout?.tileWindow() ?: return@LaunchedEffect
+    LaunchedEffect(tileLayout) {
+        val window = tileLayout?.tileWindow() ?: return@LaunchedEffect
         onTileWindowRef.value?.invoke(window)
     }
     val cameraIndex = when {
@@ -253,7 +266,7 @@ fun SitPathCanvas(
     layoutRef.value = layout
     viewportRef.value = viewport
     onViewportRef.value = onViewport
-    courseRef.value = appliedCourse
+    courseRef.value = drawnCourse
     onToggleRef.value = onToggleClose
     val showRecenter = fitButton && viewport != null && onViewport != null
     val compass = onRotate != null
@@ -780,7 +793,7 @@ fun SitPathCanvas(
         if (onRotate != null) {
             MapCompassButton(
                 frame = mapFrame,
-                northDeg = appliedCourse,
+                northDeg = drawnCourse,
                 onClick = onRotate,
                 modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
             )

@@ -1129,6 +1129,35 @@ object MapFrame {
         return if (liveCourseDeg.isFinite()) liveCourseDeg else Double.NaN
     }
 
+    /**
+     * Signed degrees from [from] to [to], in (-180, 180]. A turn past north
+     * stays the short way. A missing angle is no turn.
+     */
+    fun shortestTurn(from: Double, to: Double): Double {
+        if (!from.isFinite() || !to.isFinite()) return 0.0
+        var delta = (to - from) % 360.0
+        if (delta > 180.0) delta -= 360.0
+        if (delta <= -180.0) delta += 360.0
+        return delta
+    }
+
+    /**
+     * How long the drawn map spends turning toward the course that just arrived.
+     * A GPS course shows up about once a second. Spreading the turn across that
+     * gap keeps a curve moving. A late course still finishes within a second.
+     */
+    fun courseTurnMs(gapMs: Long): Int {
+        val gap = if (gapMs <= 0L) COURSE_TURN_MIN_MS else gapMs
+        return gap.coerceIn(COURSE_TURN_MIN_MS, COURSE_TURN_MAX_MS).toInt()
+    }
+
+    const val COURSE_TURN_MIN_MS = 200L
+    const val COURSE_TURN_MAX_MS = 1_000L
+
+    /** [pending] is the frame a tap already showed. The saved frame replaces it once the file catches up. */
+    fun onScreen(pending: Int?, saved: Int): Int =
+        if (pending != null && pending != saved) pending else saved
+
     /** Tap. North-up and direction of travel trade places. Zoom stays. */
     fun bearingToggled(current: Int): Int = when (current) {
         NORTH -> TRAVEL

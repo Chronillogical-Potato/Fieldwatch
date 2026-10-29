@@ -279,6 +279,9 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
     val pathZoomIn: StateFlow<Boolean> = _pathZoomIn
     private val _livePathTiles = MutableStateFlow<List<PathTiles.Tile>>(emptyList())
     val livePathTiles: StateFlow<List<PathTiles.Tile>> = _livePathTiles
+    /** Zoom or compass tap. Shown at once. The settings file catches up after. */
+    private val _shownMapFrame = MutableStateFlow<Int?>(null)
+    val shownMapFrame: StateFlow<Int?> = _shownMapFrame.asStateFlow()
     private val _livePathZoomIn = MutableStateFlow(false)
     val livePathZoomIn: StateFlow<Boolean> = _livePathZoomIn
     private val liveFlight = MapFlight()
@@ -1145,30 +1148,25 @@ class FieldwatchViewModel(application: Application) : AndroidViewModel(applicati
 
     /** Compass button. North-up or direction of travel. Zoom stays. No Settings row. */
     fun cycleMapFrame() {
-        viewModelScope.launch {
-            app.config.update { config ->
-                val settings = config.settings
-                val current = MapFrame.resolved(settings.mapFrame, settings.mapRotate)
-                val next = MapFrame.bearingToggled(current)
-                config.copy(
-                    settings = settings.copy(
-                        mapFrame = next,
-                        mapRotate = MapFrame.turns(next),
-                    ),
-                )
-            }
-        }
+        val settings = app.config.settings
+        val current = _shownMapFrame.value ?: MapFrame.resolved(settings.mapFrame, settings.mapRotate)
+        showMapFrame(MapFrame.bearingToggled(current))
     }
 
     /** Double-tap. Whole path or the close view around this phone. Bearing stays. */
     fun toggleMapClose() {
+        val settings = app.config.settings
+        val current = _shownMapFrame.value ?: MapFrame.resolved(settings.mapFrame, settings.mapRotate)
+        showMapFrame(MapFrame.zoomToggled(current))
+    }
+
+    /** The picture changes on this call. Saving the frame does not hold the map. */
+    private fun showMapFrame(next: Int) {
+        _shownMapFrame.value = next
         viewModelScope.launch {
             app.config.update { config ->
-                val settings = config.settings
-                val current = MapFrame.resolved(settings.mapFrame, settings.mapRotate)
-                val next = MapFrame.zoomToggled(current)
                 config.copy(
-                    settings = settings.copy(
+                    settings = config.settings.copy(
                         mapFrame = next,
                         mapRotate = MapFrame.turns(next),
                     ),
