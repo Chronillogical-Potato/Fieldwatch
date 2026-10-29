@@ -578,6 +578,7 @@ fun TrustedAlertDialog(vm: FieldwatchViewModel) {
             }
         },
         confirmButton = {
+            // One column. The dialog dismiss slot sits beside this column and covers the last action.
             Column(horizontalAlignment = Alignment.End) {
                 if (shown.offerLearn) {
                     TextButton(onClick = { vm.learnTrusted(shown.ssid, shown.bssid) }) {
@@ -594,11 +595,9 @@ fun TrustedAlertDialog(vm: FieldwatchViewModel) {
                         Text(LanguageText.text("trusted.remember"))
                     }
                 }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = { vm.dismissTrusted(shown.ssid, shown.bssid) }) {
-                Text(LanguageText.text("trusted.dismiss"))
+                TextButton(onClick = { vm.dismissTrusted(shown.ssid, shown.bssid) }) {
+                    Text(LanguageText.text("trusted.dismiss"))
+                }
             }
         },
     )

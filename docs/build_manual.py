@@ -479,7 +479,7 @@ def draw_cover(c, doc):
         y -= 16
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 9)
-    c.drawString(48, 108, "Version 1.1.35")
+    c.drawString(48, 108, "Version 1.1.36")
     c.drawString(48, 94, "29 October 2026")
     c.drawString(48, 80, "Package  app.fieldwatch   ·   Android 10+ (API 29)   ·   Target API 35")
     c.setStrokeColor(colors.HexColor("#2A3340"))
@@ -520,7 +520,7 @@ def draw_body(c, doc):
     c.line(48, 40, PAGE_W - 48, 40)
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 8)
-    c.drawString(48, 28, "v1.1.35  ·  Off Grid Pete LLC")
+    c.drawString(48, 28, "v1.1.36  ·  Off Grid Pete LLC")
     draw_ig_mark(c, 148, 30, 5.2, MUTED)
     c.setFillColor(MUTED)
     c.setFont("Helvetica", 8)
@@ -3613,8 +3613,8 @@ def story():
         P(
             "<b>Warn on an unknown maker.</b> A factory maker that is not on any access point you learned for that name. "
             "A private address does not count. A sibling the learning window is adding does not count. "
-            "The address 00:13:37 does not alert as an unknown maker by itself. That block belongs to Orient Power Home Network. "
-            "If another reason already fired, a second line says so. The screen does not name a tool."
+            "The address 00:13:37 does not alert as an unknown maker by itself. "
+            "If another reason already fired, a second line says 00:13:37 belongs to Orient Power Home Network. The screen does not name a tool."
         ),
         P(
             "<b>Warn when far from usual places.</b> The name is heard farther than the distance you picked from every place saved for it. "
@@ -6892,8 +6892,8 @@ def story():
                 ["X", "@OGridPete"],
                 ["Document", "User Manual and Technical Documentation"],
                 ["Application ID", "app.fieldwatch"],
-                ["Software version", "1.1.35 (versionCode 45), field build of 29 October 2026"],
-                ["Document version", "1.1.35"],
+                ["Software version", "1.1.36 (versionCode 46), field build of 29 October 2026"],
+                ["Document version", "1.1.36"],
                 ["Document date", "29 October 2026"],
                 ["License", "MIT License (see LICENSE); third-party: NOTICE"],
                 ["Platform", "Android 10+ (minSdk 29), targetSdk 35"],

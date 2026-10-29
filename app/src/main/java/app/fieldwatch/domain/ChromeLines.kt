@@ -1012,7 +1012,7 @@ internal object ChromeLines {
         en("trusted.learn.ap", "Learn this access point", LanguageSlot.CONTROL),
         en("trusted.ignore", "Ignore this address", LanguageSlot.CONTROL),
         en("trusted.remember", "Remember this place", LanguageSlot.CONTROL),
-        en("trusted.oui.note", "OUI {oui} is Orient Power Home Network.", LanguageSlot.CONTROL),
+        en("trusted.oui.note", "{oui} belongs to Orient Power Home Network.", LanguageSlot.CONTROL),
         en("trusted.dismiss", "Dismiss", LanguageSlot.CONTROL),
         en("trusted.last", "Last seen", LanguageSlot.CONTROL),
         en("trusted.one", "1 access point", LanguageSlot.CONTROL),

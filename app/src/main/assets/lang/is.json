@@ -1582,7 +1582,7 @@
     "trusted.learn.ap": "Learn this access point",
     "trusted.ignore": "Ignore this address",
     "trusted.remember": "Remember this place",
-    "trusted.oui.note": "OUI {oui} is Orient Power Home Network.",
+    "trusted.oui.note": "{oui} belongs to Orient Power Home Network.",
     "trusted.dismiss": "Dismiss",
     "trusted.last": "Last seen",
     "trusted.one": "1 access point",

@@ -84,7 +84,7 @@ A shared-password sighting is also a downgrade when every learned profile for th
 
 **Stronger signal.** When this hear is at a usual place and at least 15 dB louder than the loudest RSSI stored for that place, confidence goes up one notch. This is not its own alert. No stored RSSI means no notch.
 
-**OUI 00:13:37.** Information only. The IEEE registry lists that OUI as Orient Power Home Network. It does not raise confidence and it does not alert by itself. The screen does not name any tool.
+**OUI 00:13:37.** Information only. The IEEE registry lists that block as Orient Power Home Network. The warning line is "{oui} belongs to Orient Power Home Network." It does not raise confidence and it does not alert by itself. The screen does not name any tool.
 
 Known limit, stated in the help on that screen: an access point that copies a learned BSSID and a learned security profile is not caught, except when it is far from every usual place after the learning window. Only the exact name is watched. Catching a sighting can take a few minutes because Wi-Fi scans are throttled (about four scans in two minutes unless the phone's faster scan is on, then about every 8 seconds).
 

@@ -4,6 +4,11 @@ Newest first. This is Fieldwatch (`app.fieldwatch`). Each build below is what Se
 
 Fieldwatch continues the Spectre 1.2.14 field build under a new name, application id, and the MIT License. It does not replace Spectre on a phone.
 
+## 1.1.36 — 29 October 2026
+
+- A trusted-network warning for the address 00:13:37 says that block belongs to Orient Power Home Network.
+- Trusted-network warning actions sit on their own lines.
+
 ## 1.1.35 — 29 October 2026
 
 - Language packs cover more of the on-screen text: the live sit line, the radar, device explanations, filters, reports, and the human-readable Debrief and Compare wording, including the PDF. The English template lists a character limit for each line. Signature names and catalog notes stay English. CSV, JSON, GPX, KML, and the other machine exports stay as they are.
